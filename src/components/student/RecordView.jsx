@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
 import TimeInput from './TimeInput'; // Import the new component
 
-const RecordView = () => {
+const RecordView = ({ preFillData, onPreFillApplied }) => {
     const { profile, user } = useAuth();
 
     // Form State
@@ -19,6 +19,7 @@ const RecordView = () => {
     });
 
     const [submitting, setSubmitting] = useState(false);
+    const [initialMode, setInitialMode] = useState('manual'); // For TimeInput
 
     // Reference Books State
     const [referenceBooks, setReferenceBooks] = useState([]);
@@ -45,6 +46,25 @@ const RecordView = () => {
 
         return () => unsubscribe();
     }, [user]);
+
+    // Apply pre-filled data when it changes
+    useEffect(() => {
+        if (preFillData) {
+            setRecord(prev => ({
+                ...prev,
+                subject: preFillData.subject || '',
+                selectedItem: preFillData.task || '',
+                comment: preFillData.comment || ''
+            }));
+            if (preFillData.mode) {
+                setInitialMode(preFillData.mode);
+            }
+            // Notify parent that pre-fill has been applied
+            if (onPreFillApplied) {
+                onPreFillApplied();
+            }
+        }
+    }, [preFillData, onPreFillApplied]);
 
     // Helper: Find user's elective subject
     const getElectiveSubject = () => {
@@ -191,8 +211,8 @@ const RecordView = () => {
                                     type="button"
                                     onClick={() => handleSubjectSelect(sub)}
                                     className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === sub
-                                            ? 'bg-indigo-600 text-white shadow-md transform scale-105'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     {sub}
@@ -212,8 +232,8 @@ const RecordView = () => {
                                     type="button"
                                     onClick={() => handleSubjectSelect(sub)}
                                     className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === sub
-                                            ? 'bg-indigo-600 text-white shadow-md transform scale-105'
-                                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                                         }`}
                                 >
                                     {sub}
@@ -245,8 +265,8 @@ const RecordView = () => {
                                             type="button"
                                             onClick={() => handleItemSelect(task)}
                                             className={`py-2 px-3 rounded-lg text-sm font-medium transition ${record.selectedItem === task
-                                                    ? 'bg-indigo-600 text-white shadow-md'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                ? 'bg-indigo-600 text-white shadow-md'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                                 }`}
                                         >
                                             {task}
@@ -279,8 +299,8 @@ const RecordView = () => {
                                                 type="button"
                                                 onClick={() => handleItemSelect(book.name)}
                                                 className={`py-2 px-3 rounded-lg text-sm font-medium transition ${record.selectedItem === book.name
-                                                        ? 'bg-teal-600 text-white shadow-md'
-                                                        : 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+                                                    ? 'bg-teal-600 text-white shadow-md'
+                                                    : 'bg-teal-50 text-teal-700 hover:bg-teal-100'
                                                     }`}
                                             >
                                                 {book.name}
@@ -313,7 +333,7 @@ const RecordView = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         学習時間 <span className="text-red-500">*</span>
                     </label>
-                    <TimeInput value={record.duration} onChange={handleDurationChange} />
+                    <TimeInput value={record.duration} onChange={handleDurationChange} initialMode={initialMode} />
                 </div>
 
                 {/* Comment */}

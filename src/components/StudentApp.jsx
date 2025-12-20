@@ -8,6 +8,21 @@ import TimelineView from './student/TimelineView';
 const StudentApp = () => {
   const { profile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('record'); // record | home | timeline
+  const [preFillData, setPreFillData] = useState(null);
+
+  const handleAssignmentClick = (assignment) => {
+    setPreFillData({
+      subject: assignment.subject,
+      task: '課題', // Fixed task type
+      comment: assignment.content,
+      mode: 'stopwatch'
+    });
+    setActiveTab('record');
+  };
+
+  const clearPreFillData = () => {
+    setPreFillData(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -37,8 +52,8 @@ const StudentApp = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-md mx-auto w-full p-4 pb-24">
-        {activeTab === 'record' && <RecordView />}
-        {activeTab === 'home' && <HomeView />}
+        {activeTab === 'record' && <RecordView preFillData={preFillData} onPreFillApplied={clearPreFillData} />}
+        {activeTab === 'home' && <HomeView onAssignmentClick={handleAssignmentClick} />}
         {activeTab === 'timeline' && <TimelineView />}
       </main>
 

@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Check } from 'lucide-react';
 
-const TimeInput = ({ value, onChange }) => {
-    const [mode, setMode] = useState('manual'); // 'manual' | 'stopwatch'
+const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
+    const [mode, setMode] = useState(initialMode); // 'manual' | 'stopwatch'
+
+    // Apply initialMode when it changes (e.g., from assignment click)
+    useEffect(() => {
+        if (initialMode) {
+            setMode(initialMode);
+        }
+    }, [initialMode]);
 
     // --- Manual Mode (Drum Roll) States ---
     const [step, setStep] = useState(5); // 1 or 5

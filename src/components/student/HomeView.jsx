@@ -39,7 +39,7 @@ const StreakCalendar = ({ uid }) => {
 };
 
 // --- Sub-component: Shared Assignments ---
-const AssignmentsSection = ({ user, profile }) => {
+const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const [assignments, setAssignments] = useState([]);
     const [myStatus, setMyStatus] = useState({});
     const [isAdding, setIsAdding] = useState(false);
@@ -140,7 +140,11 @@ const AssignmentsSection = ({ user, profile }) => {
                                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
                                 {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
                             </div>
-                            <div className={`text-sm font-medium ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                            <div
+                                className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
+                                    }`}
+                                onClick={() => onAssignmentClick && onAssignmentClick(a)}
+                            >
                                 {a.content}
                             </div>
                         </div>
@@ -249,13 +253,13 @@ const MyPlansSection = ({ user, profile }) => {
     );
 };
 
-const HomeView = () => {
+const HomeView = ({ onAssignmentClick }) => {
     const { user, profile } = useAuth();
 
     return (
         <div className="pb-20">
             <StreakCalendar uid={user.uid} />
-            <AssignmentsSection user={user} profile={profile} />
+            <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
             <MyPlansSection user={user} profile={profile} />
         </div>
     );
