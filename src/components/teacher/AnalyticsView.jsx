@@ -118,71 +118,89 @@ const AnalyticsView = () => {
     const [filterType, setFilterType] = useState('all'); // all | bunken | riken
     const [filterSubject, setFilterSubject] = useState('all'); // all | 日本史 | 世界史 | 物理 | 生物
 
-   const fetchBounds = useCallback(async () => {
-    try {
-        // 最古の記録
-        const earliestQuery = query(
-            collectionGroup(db, 'studyRecords'),
-            orderBy('createdAt', 'asc'),
-            limit(1)
-        );
-        const earliestSnapshot = await getDocs(earliestQuery);
-        if (!earliestSnapshot.empty) {
-            setEarliestRecordDate(
-                earliestSnapshot.docs[0].data().createdAt.toDate()
+    const fetchBounds = useCallback(async () => {
+        try {
+            // 最古の記録
+            const earliestQuery = query(
+                collectionGroup(db, 'studyRecords'),
+                orderBy('createdAt', 'asc'),
+                limit(1)
             );
-        }
+            const earliestSnapshot = await getDocs(earliestQuery);
+            if (!earliestSnapshot.empty) {
+                setEarliestRecordDate(
+                    earliestSnapshot.docs[0].data().createdAt.toDate()
+                );
+            }
 
-        // 最新の記録
-        const latestQuery = query(
-            collectionGroup(db, 'studyRecords'),
-            orderBy('createdAt', 'desc'),
-            limit(1)
-        );
-        const latestSnapshot = await getDocs(latestQuery);
-        if (!latestSnapshot.empty) {
-            setLatestRecordDate(
-                latestSnapshot.docs[0].data().createdAt.toDate()
+            // 最新の記録
+            const latestQuery = query(
+                collectionGroup(db, 'studyRecords'),
+                orderBy('createdAt', 'desc'),
+                limit(1)
             );
+            const latestSnapshot = await getDocs(latestQuery);
+            if (!latestSnapshot.empty) {
+                setLatestRecordDate(
+                    latestSnapshot.docs[0].data().createdAt.toDate()
+                );
+            }
+        } catch (error) {
+            console.error('Error fetching bounds:', error);
         }
-    } catch (error) {
-        console.error('Error fetching bounds:', error);
-    }
-}, [db]);
+    }, []);
 
     const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-        // 生徒一覧（未取得時のみ）
-        if (students.length === 0) {
-            const studentsQuery = query(
-                collection(db, 'users'),
-                where('role', '==', 'student')
+        setLoading(true);
+        try {
+            // 生徒一覧（未取得時のみ）
+            if (students.length === 0) {
+                const studentsQuery = query(
+                    collection(db, 'users'),
+                    where('role', '==', 'student')
+                );
+                const studentsSnapshot = await getDocs(studentsQuery);
+                const studentsData = studentsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setStudents(studentsData);
+            }
+
+            // Fetch study records for SELECTED month
+            const start = startOfMonth(currentMonth);
+            const end = endOfMonth(currentMonth);
+
+            const recordsQuery = query(
+                collectionGroup(db, 'studyRecords'),
+                where('createdAt', '>=', start),
+                where('createdAt', '<=', end)
             );
-            const studentsSnapshot = await getDocs(studentsQuery);
-            const studentsData = studentsSnapshot.docs.map(doc => ({
+            const recordsSnapshot = await getDocs(recordsQuery);
+            const recordsData = recordsSnapshot.docs.map(doc => ({
                 id: doc.id,
+                userId: doc.ref.parent.parent.id,
                 ...doc.data()
             }));
-            setStudents(studentsData);
+            setStudyRecords(recordsData);
+
+            // Calculate monthly total
+            const total = recordsData.reduce((sum, record) => sum + (record.duration || 0), 0) / 60;
+            setMonthlyTotal(Math.round(total));
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        } finally {
+            setLoading(false);
         }
+    }, [students.length, currentMonth]);
 
-        // ※この下に currentMonth を使った集計処理が続く想定
+    useEffect(() => {
+        fetchBounds();
+    }, [fetchBounds]);
 
-    } catch (error) {
-        console.error('Error fetching data:', error);
-    } finally {
-        setLoading(false);
-    }
-}, [db, students.length, currentMonth]);
-
-useEffect(() => {
-    fetchBounds();
-}, [fetchBounds]);
-
-useEffect(() => {
-    fetchData();
-}, [fetchData]);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
 
     const handlePrevMonth = () => {

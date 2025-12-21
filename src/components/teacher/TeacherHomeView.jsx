@@ -165,7 +165,7 @@ const TeacherHomeView = () => {
             fetchAssignmentProgress(data);
         });
         return unsubscribe;
-    }, [students]);
+    }, [fetchAssignmentProgress]);
 
     const fetchAssignmentProgress = useCallback(async (assignmentsList) => {
         try {
@@ -224,7 +224,138 @@ const TeacherHomeView = () => {
 
     return (
         <div className="pb-20 space-y-6">
-            {/* ここに既存の UI をそのまま */}
+            {/* Daily Active Count */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">
+                            今日の記録者数
+                        </h3>
+                        <div className="text-4xl font-bold text-indigo-600">
+                            {dailyActiveCount} <span className="text-lg text-gray-400 font-normal">人</span>
+                        </div>
+                    </div>
+                    <div className="bg-indigo-50 p-4 rounded-full">
+                        <Users className="w-8 h-8 text-indigo-600" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Weekly Summary */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="w-5 h-5 text-gray-500" />
+                    <h3 className="font-bold text-gray-900">先週のサマリー</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Total Hours */}
+                    <div className="bg-indigo-50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                            <TrendingUp className="w-4 h-4 text-indigo-600" />
+                            <span className="text-xs font-bold text-indigo-600">総学習時間</span>
+                        </div>
+                        <div className="text-2xl font-bold text-indigo-700">
+                            {weeklyStats.totalHours}h
+                        </div>
+                    </div>
+
+                    {/* Average per student */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Award className="w-4 h-4 text-green-600" />
+                            <span className="text-xs font-bold text-green-600">平均/人</span>
+                        </div>
+                        <div className="text-2xl font-bold text-green-700">
+                            {weeklyStats.avgHoursPerStudent}h
+                        </div>
+                    </div>
+                </div>
+
+                {/* Top Students */}
+                <div className="mt-4">
+                    <h4 className="text-xs font-bold text-gray-500 mb-2">最も活発な生徒</h4>
+                    <div className="space-y-2">
+                        {weeklyStats.topStudents.map((student, index) => (
+                            <div key={student.userId} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-gray-400">#{index + 1}</span>
+                                    <span className="text-sm font-medium text-gray-900">{student.userName}</span>
+                                </div>
+                                <span className="text-sm font-bold text-indigo-600">{student.hours}h</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Top Subjects */}
+                <div className="mt-4">
+                    <h4 className="text-xs font-bold text-gray-500 mb-2">人気の科目</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {weeklyStats.topSubjects.map((item, index) => (
+                            <div key={item.subject} className="bg-purple-50 px-3 py-2 rounded-lg">
+                                <span className="text-xs text-purple-600 font-bold">#{index + 1}</span>
+                                <span className="text-sm font-medium text-purple-900 ml-2">{item.subject}</span>
+                                <span className="text-xs text-purple-600 ml-2">({item.hours}h)</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Assignments Progress */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-4">
+                    <BookOpen className="w-5 h-5 text-gray-500" />
+                    <h3 className="font-bold text-gray-900">課題進捗</h3>
+                </div>
+
+                <div className="space-y-3">
+                    {assignments.length === 0 ? (
+                        <p className="text-sm text-gray-400">課題はありません</p>
+                    ) : (
+                        assignments.map(assignment => {
+                            const progress = assignmentProgress[assignment.id] || { completed: 0, total: 0 };
+                            const percentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+
+                            return (
+                                <div key={assignment.id} className="border border-gray-200 rounded-lg p-3">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                                {assignment.subject}
+                                            </span>
+                                            {assignment.dueDate && (
+                                                <span className="text-xs text-gray-400 ml-2">
+                                                    〆 {assignment.dueDate}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm font-bold text-gray-900">
+                                                {progress.completed} / {progress.total}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                {percentage.toFixed(0)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-800 font-medium mb-2">
+                                        {assignment.content}
+                                    </div>
+                                    {/* Progress bar */}
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div
+                                            className="bg-indigo-600 h-2 rounded-full transition-all"
+                                            style={{ width: `${percentage}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
         </div>
     );
 };
