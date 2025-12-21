@@ -35,7 +35,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
 
     // Constants
     const ITEM_HEIGHT = 40;
-    const PADDING = 60; // py-[60px]
+    //const PADDING = 60; // py-[60px]
 
     // Generate options
     const hourOptions = Array.from({ length: 6 }, (_, i) => i); // 0-5 hours
@@ -94,6 +94,12 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
             }
         }
     }, [visualMinutes, step]); // Re-run when step changes too
+useEffect(() => {
+  updateTime(hours, minutes);
+}, [hours, minutes]);
+useEffect(() => {
+  setOptions(hourOptions);
+}, [hourOptions]);
 
     // 3. Commit changes to parent (debounced) - handled in scroll handlers
 

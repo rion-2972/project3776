@@ -1,6 +1,6 @@
 // src/components/ProfileSetup.jsx
 import React, { useState } from 'react';
-import { Users, BookOpen, X } from 'lucide-react';
+import { Users, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { SUBJECT_GROUPS, getDefaultSubjects } from '../utils/constants';
 

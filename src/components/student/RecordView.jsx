@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Send, Plus, X } from 'lucide-react';
+import { BookOpen, Send, Plus } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -339,7 +339,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 {/* Comment */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ひとことコメント
+                        ひとこと
                     </label>
                     <textarea
                         name="comment"
