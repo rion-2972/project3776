@@ -24,37 +24,8 @@ const TeacherHomeView = () => {
     const [assignmentProgress, setAssignmentProgress] = useState({});
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [earliestRecordDate, setEarliestRecordDate] = useState(null);
-    const [latestRecordDate, setLatestRecordDate] = useState(null);
 
-    // ==== fetch bounds ====
-    const fetchBounds = useCallback(async () => {
-        try {
-            // 最古の記録
-            const earliestQuery = query(
-                collectionGroup(db, 'studyRecords'),
-                orderBy('createdAt', 'asc'),
-                limit(1)
-            );
-            const earliestSnapshot = await getDocs(earliestQuery);
-            if (!earliestSnapshot.empty) {
-                setEarliestRecordDate(earliestSnapshot.docs[0].data().createdAt.toDate());
-            }
 
-            // 最新の記録
-            const latestQuery = query(
-                collectionGroup(db, 'studyRecords'),
-                orderBy('createdAt', 'desc'),
-                limit(1)
-            );
-            const latestSnapshot = await getDocs(latestQuery);
-            if (!latestSnapshot.empty) {
-                setLatestRecordDate(latestSnapshot.docs[0].data().createdAt.toDate());
-            }
-        } catch (error) {
-            console.error('Error fetching bounds:', error);
-        }
-    }, []);
 
     // ==== fetch students ====
     const fetchStudents = useCallback(async () => {
@@ -149,24 +120,7 @@ const TeacherHomeView = () => {
         }
     }, []);
 
-    // ==== fetch assignments ====
-    const fetchAssignments = useCallback(() => {
-        const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const now = new Date();
-            const data = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(a => {
-                    if (!a.dueDate) return true;
-                    const dueDate = new Date(a.dueDate);
-                    return dueDate >= now;
-                });
-            setAssignments(data);
-            fetchAssignmentProgress(data);
-        });
-        return unsubscribe;
-    }, [fetchAssignmentProgress]);
-
+    // ==== fetch assignment progress ====
     const fetchAssignmentProgress = useCallback(async (assignmentsList) => {
         try {
             const progress = {};
@@ -201,10 +155,25 @@ const TeacherHomeView = () => {
         }
     }, [students]);
 
+    // ==== fetch assignments ====
+    const fetchAssignments = useCallback(() => {
+        const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const now = new Date();
+            const data = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(a => {
+                    if (!a.dueDate) return true;
+                    const dueDate = new Date(a.dueDate);
+                    return dueDate >= now;
+                });
+            setAssignments(data);
+            fetchAssignmentProgress(data);
+        });
+        return unsubscribe;
+    }, [fetchAssignmentProgress]);
+
     // ==== useEffect ====
-    useEffect(() => {
-        fetchBounds();
-    }, [fetchBounds]);
 
     useEffect(() => {
         fetchStudents();
