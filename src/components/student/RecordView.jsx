@@ -5,6 +5,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
 import TimeInput from './TimeInput'; // Import the new component
+import { X } from 'lucide-react';
 
 const RecordView = ({ preFillData, onPreFillApplied }) => {
     const { profile, user } = useAuth();

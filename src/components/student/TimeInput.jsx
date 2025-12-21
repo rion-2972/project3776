@@ -94,12 +94,6 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
             }
         }
     }, [visualMinutes, step]); // Re-run when step changes too
-useEffect(() => {
-  updateTime(hours, minutes);
-}, [hours, minutes]);
-useEffect(() => {
-  setOptions(hourOptions);
-}, [hourOptions]);
 
     // 3. Commit changes to parent (debounced) - handled in scroll handlers
 
