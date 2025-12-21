@@ -49,10 +49,20 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     useEffect(() => {
         const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
+            const now = new Date();
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             // Filter for user's subjects
             const userSubjects = profile?.subjects || [];
-            const relevant = data.filter(a => userSubjects.includes(a.subject));
+            const relevant = data.filter(a => {
+                // Filter by subject
+                if (!userSubjects.includes(a.subject)) return false;
+                // Filter out past due assignments
+                if (a.dueDate) {
+                    const dueDate = new Date(a.dueDate);
+                    if (dueDate < now) return false;
+                }
+                return true;
+            });
             setAssignments(relevant);
         });
         return () => unsubscribe();
@@ -130,26 +140,34 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             )}
 
             <div className="space-y-2">
-                {assignments.length === 0 ? <p className="text-sm text-gray-400">課題はありません</p> : assignments.map(a => (
-                    <div key={a.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                        <button onClick={() => toggleComplete(a.id, myStatus[a.id])}>
-                            {myStatus[a.id] ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
-                        </button>
-                        <div className="flex-1">
-                            <div className="flex justify-between">
-                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
-                                {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
-                            </div>
-                            <div
-                                className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
-                                    }`}
-                                onClick={() => onAssignmentClick && onAssignmentClick(a)}
-                            >
-                                {a.content}
+                {assignments.length === 0 ? <p className="text-sm text-gray-400">課題はありません</p> :
+                    // Sort: uncompleted first, completed last
+                    [...assignments].sort((a, b) => {
+                        const aCompleted = myStatus[a.id] || false;
+                        const bCompleted = myStatus[b.id] || false;
+                        if (aCompleted === bCompleted) return 0;
+                        return aCompleted ? 1 : -1;
+                    }).map(a => (
+                        <div key={a.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                            <button onClick={() => toggleComplete(a.id, myStatus[a.id])}>
+                                {myStatus[a.id] ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
+                            </button>
+                            <div className="flex-1">
+                                <div className="flex justify-between">
+                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
+                                    {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
+                                </div>
+                                <div
+                                    className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
+                                        }`}
+                                    onClick={() => onAssignmentClick && onAssignmentClick(a)}
+                                >
+                                    {a.content}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    ))
+                }
             </div>
         </div>
     );
