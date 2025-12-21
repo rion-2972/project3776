@@ -93,7 +93,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
                 setTimeout(() => { isScrollingProgrammatically.current = false; }, 100);
             }
         }
-    }, [visualMinutes, step]); // Re-run when step changes too
+    }, [visualMinutes, step, minuteOptions]); // Re-run when step changes too
 
     // 3. Commit changes to parent (debounced) - handled in scroll handlers
 

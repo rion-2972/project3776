@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { collection, query, getDocs, collectionGroup, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Filter, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -118,77 +118,72 @@ const AnalyticsView = () => {
     const [filterType, setFilterType] = useState('all'); // all | bunken | riken
     const [filterSubject, setFilterSubject] = useState('all'); // all | 日本史 | 世界史 | 物理 | 生物
 
-    useEffect(() => {
-        fetchBounds();
-    }, [fetchBounds]);
-
-    useEffect(() => {
-        fetchData();
-    }, [currentMonth,fetchData]);
-
-    const fetchBounds = async () => {
-        try {
-            // Get earliest record
-            const earliestQuery = query(collectionGroup(db, 'studyRecords'), orderBy('createdAt', 'asc'), limit(1));
-            const earliestSnapshot = await getDocs(earliestQuery);
-            if (!earliestSnapshot.empty) {
-                setEarliestRecordDate(earliestSnapshot.docs[0].data().createdAt.toDate());
-            }
-
-            // Get latest record
-            const latestQuery = query(collectionGroup(db, 'studyRecords'), orderBy('createdAt', 'desc'), limit(1));
-            const latestSnapshot = await getDocs(latestQuery);
-            if (!latestSnapshot.empty) {
-                setLatestRecordDate(latestSnapshot.docs[0].data().createdAt.toDate());
-            }
-        } catch (error) {
-            console.error('Error fetching bounds:', error);
-        }
-    };
-
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            // Fetch all students (only if not already fetched, but filter logic depends on it so fetch once is fine if list doesn't change much)
-            if (students.length === 0) {
-                const studentsQuery = query(
-                    collection(db, 'users'),
-                    where('role', '==', 'student')
-                );
-                const studentsSnapshot = await getDocs(studentsQuery);
-                const studentsData = studentsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setStudents(studentsData);
-            }
-
-            // Fetch study records for SELECTED month
-            const start = startOfMonth(currentMonth);
-            const end = endOfMonth(currentMonth);
-
-            const recordsQuery = query(
-                collectionGroup(db, 'studyRecords'),
-                where('createdAt', '>=', start),
-                where('createdAt', '<=', end)
+   const fetchBounds = useCallback(async () => {
+    try {
+        // 最古の記録
+        const earliestQuery = query(
+            collectionGroup(db, 'studyRecords'),
+            orderBy('createdAt', 'asc'),
+            limit(1)
+        );
+        const earliestSnapshot = await getDocs(earliestQuery);
+        if (!earliestSnapshot.empty) {
+            setEarliestRecordDate(
+                earliestSnapshot.docs[0].data().createdAt.toDate()
             );
-            const recordsSnapshot = await getDocs(recordsQuery);
-            const recordsData = recordsSnapshot.docs.map(doc => ({
+        }
+
+        // 最新の記録
+        const latestQuery = query(
+            collectionGroup(db, 'studyRecords'),
+            orderBy('createdAt', 'desc'),
+            limit(1)
+        );
+        const latestSnapshot = await getDocs(latestQuery);
+        if (!latestSnapshot.empty) {
+            setLatestRecordDate(
+                latestSnapshot.docs[0].data().createdAt.toDate()
+            );
+        }
+    } catch (error) {
+        console.error('Error fetching bounds:', error);
+    }
+}, [db]);
+
+    const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+        // 生徒一覧（未取得時のみ）
+        if (students.length === 0) {
+            const studentsQuery = query(
+                collection(db, 'users'),
+                where('role', '==', 'student')
+            );
+            const studentsSnapshot = await getDocs(studentsQuery);
+            const studentsData = studentsSnapshot.docs.map(doc => ({
                 id: doc.id,
-                userId: doc.ref.parent.parent.id, // Extract user ID from path
                 ...doc.data()
             }));
-            setStudyRecords(recordsData);
-
-            // Calculate monthly total
-            const total = recordsData.reduce((sum, record) => sum + (record.duration || 0), 0) / 60; // Convert to hours
-            setMonthlyTotal(Math.round(total));
-        } catch (error) {
-            console.error('Error fetching data:', error);
-        } finally {
-            setLoading(false);
+            setStudents(studentsData);
         }
-    };
+
+        // ※この下に currentMonth を使った集計処理が続く想定
+
+    } catch (error) {
+        console.error('Error fetching data:', error);
+    } finally {
+        setLoading(false);
+    }
+}, [db, students.length, currentMonth]);
+
+useEffect(() => {
+    fetchBounds();
+}, [fetchBounds]);
+
+useEffect(() => {
+    fetchData();
+}, [fetchData]);
+
 
     const handlePrevMonth = () => {
         setCurrentMonth(prev => addMonths(prev, -1));
