@@ -6,8 +6,7 @@ import {
     getDocs,
     collectionGroup,
     orderBy,
-    onSnapshot,
-    limit
+    onSnapshot
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Users, Calendar, BookOpen, TrendingUp, Award } from 'lucide-react';
