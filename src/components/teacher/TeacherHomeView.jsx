@@ -21,7 +21,7 @@ const TeacherHomeView = () => {
         fetchWeeklyStats();
         fetchAssignments();
         fetchStudents();
-    }, []);
+    }, [fetchDailyActive,fetchWeeklyStats,fetchAssignments,fetchStudents]);
 
     const fetchStudents = async () => {
         try {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, collectionGroup, orderBy, limit } from 'firebase/firestore';
+import { collection, query, getDocs, collectionGroup, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { where } from 'firebase/firestore';
 
 // Native JS date utilities
 const formatMonth = (date) => {
@@ -121,11 +120,11 @@ const AnalyticsView = () => {
 
     useEffect(() => {
         fetchBounds();
-    }, []);
+    }, [fetchBounds]);
 
     useEffect(() => {
         fetchData();
-    }, [currentMonth]);
+    }, [currentMonth,fetchData]);
 
     const fetchBounds = async () => {
         try {

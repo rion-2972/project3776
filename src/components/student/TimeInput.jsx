@@ -64,7 +64,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
             setMinutes(m);
             setVisualMinutes(m);
         }
-    }, [value]);
+    }, [value,hours,minutes]);
 
     // 2. Scroll to position when visual values change (initial load or external update)
     // We use detailed dependency tracking to avoid fighting user scroll
@@ -80,7 +80,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
                 setTimeout(() => { isScrollingProgrammatically.current = false; }, 100);
             }
         }
-    }, [visualHours]); // Dependencies: only when the *intent* changes
+    }, [visualHours,hourOptions,ITEM_HEIGHT]); // Dependencies: only when the *intent* changes
 
     useEffect(() => {
         if (!minutesScrollRef.current) return;
