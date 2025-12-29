@@ -7,7 +7,7 @@ import TimelineView from './student/TimelineView';
 
 const TeacherApp = () => {
   const { profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState('analytics'); // analytics | home | timeline
+  const [activeTab, setActiveTab] = useState('home'); // analytics | home | timeline
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
