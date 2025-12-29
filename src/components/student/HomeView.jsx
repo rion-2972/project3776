@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc, where, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Calendar, CheckCircle, Circle, Plus, Trash2 } from 'lucide-react';
+import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit } from 'lucide-react';
 
 // --- Sub-component: Daily Study Hours ---
 const DailyStudyHours = ({ uid }) => {
@@ -179,6 +179,8 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const [myStatus, setMyStatus] = useState({});
     const [isAdding, setIsAdding] = useState(false);
     const [newAssign, setNewAssign] = useState({ subject: '', content: '', dueDate: '' });
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ subject: '', content: '', dueDate: '' });
 
     // Fetch Assignments (Global) - In real app, filter by subject match?
     useEffect(() => {
@@ -237,6 +239,32 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
         setNewAssign({ subject: '', content: '', dueDate: '' });
     };
 
+    const handleEditStart = (assignment) => {
+        setEditingId(assignment.id);
+        setEditForm({
+            subject: assignment.subject,
+            content: assignment.content,
+            dueDate: assignment.dueDate || ''
+        });
+    };
+
+    const handleEditSave = async (assignmentId) => {
+        if (window.confirm('この課題を編集しますか？')) {
+            const assignRef = doc(db, 'assignments', assignmentId);
+            await updateDoc(assignRef, {
+                ...editForm,
+                updatedAt: serverTimestamp()
+            });
+            setEditingId(null);
+        }
+    };
+
+    const handleDelete = async (assignmentId) => {
+        if (window.confirm('この課題を削除しますか？\nこの操作は取り消せません。')) {
+            await deleteDoc(doc(db, 'assignments', assignmentId));
+        }
+    };
+
     return (
         <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
@@ -288,18 +316,80 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                 {myStatus[a.id] ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
                             </button>
                             <div className="flex-1">
-                                <div className="flex justify-between">
-                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
-                                    {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
-                                </div>
-                                <div
-                                    className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
-                                        }`}
-                                    onClick={() => onAssignmentClick && onAssignmentClick(a)}
-                                >
-                                    {a.content}
-                                </div>
+                                {editingId === a.id ? (
+                                    // Edit Mode
+                                    <div className="space-y-2">
+                                        <select
+                                            className="block w-full p-2 rounded border-gray-300 text-sm"
+                                            value={editForm.subject}
+                                            onChange={e => setEditForm({ ...editForm, subject: e.target.value })}
+                                        >
+                                            <option value="">科目を選択</option>
+                                            {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                        <input
+                                            className="block w-full p-2 rounded border-gray-300 text-sm"
+                                            placeholder="課題内容"
+                                            value={editForm.content}
+                                            onChange={e => setEditForm({ ...editForm, content: e.target.value })}
+                                        />
+                                        <input
+                                            type="date"
+                                            className="block w-full p-2 rounded border-gray-300 text-sm"
+                                            value={editForm.dueDate}
+                                            onChange={e => setEditForm({ ...editForm, dueDate: e.target.value })}
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleEditSave(a.id)}
+                                                className="flex-1 bg-indigo-600 text-white py-2 rounded text-sm font-bold"
+                                            >
+                                                保存
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingId(null)}
+                                                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded text-sm font-bold"
+                                            >
+                                                キャンセル
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // Display Mode
+                                    <>
+                                        <div className="flex justify-between">
+                                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
+                                            {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
+                                        </div>
+                                        <div
+                                            className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
+                                                }`}
+                                            onClick={() => onAssignmentClick && onAssignmentClick(a)}
+                                        >
+                                            {a.content}
+                                        </div>
+                                    </>
+                                )}
                             </div>
+                            {/* Edit/Delete buttons for author only */}
+                            {a.createdBy === user.uid && editingId !== a.id && (
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => handleEditStart(a)}
+                                        className="p-2 text-gray-400 hover:text-indigo-600 transition"
+                                        title="編集"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(a.id)}
+                                        className="p-2 text-gray-400 hover:text-red-600 transition"
+                                        title="削除"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))
                 }
