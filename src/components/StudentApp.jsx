@@ -7,7 +7,7 @@ import TimelineView from './student/TimelineView';
 
 const StudentApp = () => {
   const { profile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState('record'); // record | home | timeline
+  const [activeTab, setActiveTab] = useState('home'); // record | home | timeline
   const [preFillData, setPreFillData] = useState(null);
 
   const handleAssignmentClick = (assignment) => {
