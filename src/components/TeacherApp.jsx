@@ -15,9 +15,7 @@ const TeacherApp = () => {
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">P</span>
-            </div>
+            <img src="/Project3776.png" alt="Project 3776" className="w-8 h-8 rounded-lg" />
             <h1 className="text-lg font-bold text-gray-900">Project 3776</h1>
           </div>
           <div className="flex items-center gap-3">
