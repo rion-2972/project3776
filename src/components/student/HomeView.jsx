@@ -176,47 +176,80 @@ const DailyStudyHours = ({ uid }) => {
 // --- Sub-component: Shared Assignments ---
 const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const [assignments, setAssignments] = useState([]);
+    const [pastAssignments, setPastAssignments] = useState([]);
     const [myStatus, setMyStatus] = useState({});
     const [isAdding, setIsAdding] = useState(false);
     const [newAssign, setNewAssign] = useState({ subject: '', content: '', dueDate: '' });
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({ subject: '', content: '', dueDate: '' });
+    const [showPastAssignments, setShowPastAssignments] = useState(false);
 
     // Fetch Assignments (Global) - In real app, filter by subject match?
     useEffect(() => {
         const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             // Filter for user's subjects
             const userSubjects = profile?.subjects || [];
-            const relevant = data.filter(a => {
+            const current = [];
+            const past = [];
+            
+            data.forEach(a => {
                 // Filter by subject
-                if (!userSubjects.includes(a.subject)) return false;
-                // Filter out past due assignments
+                if (!userSubjects.includes(a.subject)) return;
+                
                 if (a.dueDate) {
                     const dueDate = new Date(a.dueDate);
-                    if (dueDate < now) return false;
+                    // Past assignments: oneWeekAgo <= dueDate < now
+                    if (dueDate >= oneWeekAgo && dueDate < now) {
+                        past.push(a);
+                    }
+                    // Current assignments: dueDate >= now
+                    else if (dueDate >= now) {
+                        current.push(a);
+                    }
+                } else {
+                    // No due date, treat as current
+                    current.push(a);
                 }
-                return true;
             });
-            setAssignments(relevant);
+            
+            setAssignments(current);
+            setPastAssignments(past);
         });
         return () => unsubscribe();
     }, [profile]);
 
-    // Fetch My Status
+    // Fetch My Status (including updatedAt for deadline completion check)
     useEffect(() => {
         const q = query(collection(db, `users/${user.uid}/assignmentStatus`));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const statusMap = {};
             snapshot.docs.forEach(doc => {
-                statusMap[doc.data().assignmentId] = doc.data().completed;
+                const data = doc.data();
+                statusMap[data.assignmentId] = {
+                    completed: data.completed,
+                    updatedAt: data.updatedAt
+                };
             });
             setMyStatus(statusMap);
         });
         return () => unsubscribe();
     }, [user]);
+    
+    // Helper function to check if assignment was completed within deadline
+    const isCompletedWithinDeadline = (assignment, statusData) => {
+        if (!statusData || !statusData.completed) return false;
+        if (!assignment.dueDate || !statusData.updatedAt) return false;
+        
+        const deadline = new Date(assignment.dueDate);
+        deadline.setHours(23, 59, 59, 999); // End of deadline day
+        
+        const completedAt = statusData.updatedAt.toDate();
+        return completedAt <= deadline;
+    };
 
     const toggleComplete = async (assignmentId, currentStatus) => {
         const statusRef = doc(db, `users/${user.uid}/assignmentStatus`, assignmentId);
@@ -225,6 +258,13 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             completed: !currentStatus,
             updatedAt: serverTimestamp()
         });
+    };
+    
+    // Format date for display (YYYY-MM-DD format)
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
     };
 
     const handleAdd = async (e) => {
@@ -306,14 +346,14 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                 {assignments.length === 0 ? <p className="text-sm text-gray-400">課題はありません</p> :
                     // Sort: uncompleted first, completed last
                     [...assignments].sort((a, b) => {
-                        const aCompleted = myStatus[a.id] || false;
-                        const bCompleted = myStatus[b.id] || false;
+                        const aCompleted = myStatus[a.id]?.completed || false;
+                        const bCompleted = myStatus[b.id]?.completed || false;
                         if (aCompleted === bCompleted) return 0;
                         return aCompleted ? 1 : -1;
                     }).map(a => (
                         <div key={a.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                            <button onClick={() => toggleComplete(a.id, myStatus[a.id])}>
-                                {myStatus[a.id] ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
+                            <button onClick={() => toggleComplete(a.id, myStatus[a.id]?.completed)}>
+                                {myStatus[a.id]?.completed ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
                             </button>
                             <div className="flex-1">
                                 {editingId === a.id ? (
@@ -359,10 +399,10 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                     <>
                                         <div className="flex justify-between">
                                             <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
-                                            {a.dueDate && <span className="text-xs text-gray-400">〆 {a.dueDate}</span>}
+                                            {a.dueDate && <span className="text-xs text-gray-400">〆 {formatDate(a.dueDate)}</span>}
                                         </div>
                                         <div
-                                            className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id] ? 'text-gray-400 line-through' : 'text-gray-800'
+                                            className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id]?.completed ? 'text-gray-400 line-through' : 'text-gray-800'
                                                 }`}
                                             onClick={() => onAssignmentClick && onAssignmentClick(a)}
                                         >
@@ -394,6 +434,54 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                     ))
                 }
             </div>
+            
+            {/* Past Assignments Section */}
+            {pastAssignments.length > 0 && (
+                <div className="mt-4">
+                    <button
+                        onClick={() => setShowPastAssignments(!showPastAssignments)}
+                        className="w-full text-sm text-indigo-600 font-bold py-2 px-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition"
+                    >
+                        {showPastAssignments ? '過去の課題を非表示にする' : '過去の課題を確認する'}
+                    </button>
+                    
+                    {showPastAssignments && (
+                        <div className="mt-3 space-y-2">
+                            {[...pastAssignments].sort((a, b) => {
+                                // Sort by due date descending (most recent first)
+                                const aDate = a.dueDate ? new Date(a.dueDate) : new Date(0);
+                                const bDate = b.dueDate ? new Date(b.dueDate) : new Date(0);
+                                return bDate - aDate;
+                            }).map(a => {
+                                const statusData = myStatus[a.id];
+                                const completedWithinDeadline = isCompletedWithinDeadline(a, statusData);
+                                
+                                return (
+                                    <div key={a.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200">
+                                        {/* Read-only completion indicator */}
+                                        <div>
+                                            {completedWithinDeadline ? (
+                                                <CheckCircle className="w-5 h-5 text-green-500" />
+                                            ) : (
+                                                <Circle className="w-5 h-5 text-gray-300" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between">
+                                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
+                                                {a.dueDate && <span className="text-xs text-gray-400">〆 {formatDate(a.dueDate)}</span>}
+                                            </div>
+                                            <div className={`text-sm font-medium ${completedWithinDeadline ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                                                {a.content}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
