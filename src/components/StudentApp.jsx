@@ -14,7 +14,7 @@ const StudentApp = () => {
     setPreFillData({
       subject: assignment.subject,
       task: '課題', // Fixed task type
-      comment: assignment.content,
+      contentDetails: assignment.content,
       mode: 'stopwatch'
     });
     setActiveTab('record');

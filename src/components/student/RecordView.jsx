@@ -55,7 +55,8 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 ...prev,
                 subject: preFillData.subject || '',
                 selectedItem: preFillData.task || '',
-                comment: preFillData.comment || ''
+                contentDetails: preFillData.contentDetails || '',
+                comment: '' // Keep comment empty
             }));
             if (preFillData.mode) {
                 setInitialMode(preFillData.mode);
