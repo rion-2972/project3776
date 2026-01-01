@@ -295,6 +295,10 @@ const TeacherHomeView = () => {
     const [expandedAssignments, setExpandedAssignments] = useState(new Set());
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showPastAssignmentsView, setShowPastAssignmentsView] = useState(false);
+    const [pastAssignments, setPastAssignments] = useState([]);
+    const [pastAssignmentProgress, setPastAssignmentProgress] = useState({});
+    const [expandedPastAssignments, setExpandedPastAssignments] = useState(new Set());
 
 
 
@@ -402,6 +406,18 @@ const TeacherHomeView = () => {
         }
     }, []);
 
+    // Helper function to check if assignment was completed within deadline
+    const isCompletedWithinDeadline = useCallback((assignment, statusData) => {
+        if (!statusData || !statusData.completed) return false;
+        if (!assignment.dueDate || !statusData.updatedAt) return false;
+        
+        const deadline = new Date(assignment.dueDate);
+        deadline.setHours(23, 59, 59, 999); // End of deadline day
+        
+        const completedAt = statusData.updatedAt.toDate();
+        return completedAt <= deadline;
+    }, []);
+
     // ==== fetch assignment progress ====
     const fetchAssignmentProgress = useCallback(async (assignmentsList) => {
         try {
@@ -443,6 +459,53 @@ const TeacherHomeView = () => {
         }
     }, [students]);
 
+    // ==== fetch past assignment progress (with deadline check) ====
+    const fetchPastAssignmentProgress = useCallback(async (assignmentsList) => {
+        try {
+            const progress = {};
+            for (const assignment of assignmentsList) {
+                const eligibleStudents = students.filter(s =>
+                    s.subjects && s.subjects.includes(assignment.subject)
+                );
+                const eligibleCount = eligibleStudents.length;
+
+                const completedStudentsList = [];
+                const notCompletedStudentsList = [];
+
+                for (const student of eligibleStudents) {
+                    const statusDoc = await getDocs(
+                        query(
+                            collection(db, `users/${student.id}/assignmentStatus`),
+                            where('assignmentId', '==', assignment.id)
+                        )
+                    );
+                    
+                    if (!statusDoc.empty) {
+                        const statusData = statusDoc.docs[0].data();
+                        // Check if completed within deadline
+                        if (isCompletedWithinDeadline(assignment, statusData)) {
+                            completedStudentsList.push(student);
+                        } else {
+                            notCompletedStudentsList.push(student);
+                        }
+                    } else {
+                        notCompletedStudentsList.push(student);
+                    }
+                }
+
+                progress[assignment.id] = {
+                    completed: completedStudentsList.length,
+                    total: eligibleCount,
+                    completedStudents: completedStudentsList,
+                    notCompletedStudents: notCompletedStudentsList
+                };
+            }
+            setPastAssignmentProgress(progress);
+        } catch (error) {
+            console.error('Error fetching past assignment progress:', error);
+        }
+    }, [students, isCompletedWithinDeadline]);
+
     // ==== fetch assignments ====
     const fetchAssignments = useCallback(() => {
         const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
@@ -461,6 +524,24 @@ const TeacherHomeView = () => {
         return unsubscribe;
     }, [fetchAssignmentProgress]);
 
+    // ==== fetch past assignments ====
+    const fetchPastAssignments = useCallback(() => {
+        const q = query(collection(db, 'assignments'), orderBy('dueDate', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const now = new Date();
+            const data = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(a => {
+                    if (!a.dueDate) return false;
+                    const dueDate = new Date(a.dueDate);
+                    return dueDate < now; // All past assignments
+                });
+            setPastAssignments(data);
+            fetchPastAssignmentProgress(data);
+        });
+        return unsubscribe;
+    }, [fetchPastAssignmentProgress]);
+
     // ==== useEffect ====
 
     useEffect(() => {
@@ -468,8 +549,12 @@ const TeacherHomeView = () => {
         fetchDailyActive();
         fetchWeeklyStats();
         const unsubscribe = fetchAssignments();
-        return () => unsubscribe && unsubscribe();
-    }, [fetchStudents, fetchDailyActive, fetchWeeklyStats, fetchAssignments]);
+        const unsubscribePast = fetchPastAssignments();
+        return () => {
+            unsubscribe && unsubscribe();
+            unsubscribePast && unsubscribePast();
+        };
+    }, [fetchStudents, fetchDailyActive, fetchWeeklyStats, fetchAssignments, fetchPastAssignments]);
 
     const formatTime = (minutes) => {
         if (minutes < 60) {
@@ -488,6 +573,29 @@ const TeacherHomeView = () => {
                 newSet.add(assignmentId);
             }
             return newSet;
+        });
+    };
+
+    const togglePastAssignmentExpand = (assignmentId) => {
+        setExpandedPastAssignments(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(assignmentId)) {
+                newSet.delete(assignmentId);
+            } else {
+                newSet.add(assignmentId);
+            }
+            return newSet;
+        });
+    };
+
+    // Format date for display
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ja-JP', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
         });
     };
 
@@ -631,11 +739,20 @@ const TeacherHomeView = () => {
             </div>
 
             {/* Assignments Progress */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex items-center gap-2 mb-4">
-                    <BookOpen className="w-5 h-5 text-gray-500" />
-                    <h3 className="font-bold text-gray-900">課題進捗</h3>
-                </div>
+            {!showPastAssignmentsView ? (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <BookOpen className="w-5 h-5 text-gray-500" />
+                            <h3 className="font-bold text-gray-900">課題進捗</h3>
+                        </div>
+                        <button
+                            onClick={() => setShowPastAssignmentsView(true)}
+                            className="text-sm text-indigo-600 font-bold px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition"
+                        >
+                            過去の課題達成状況を確認する
+                        </button>
+                    </div>
 
                 <div className="space-y-3">
                     {assignments.length === 0 ? (
@@ -732,6 +849,117 @@ const TeacherHomeView = () => {
                     )}
                 </div>
             </div>
+            ) : (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 opacity-75">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <BookOpen className="w-5 h-5 text-gray-500" />
+                            <h3 className="font-bold text-gray-900">過去の課題達成状況</h3>
+                        </div>
+                        <button
+                            onClick={() => setShowPastAssignmentsView(false)}
+                            className="text-sm text-gray-700 font-bold px-4 py-2 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 transition"
+                        >
+                            課題進捗に戻る
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {pastAssignments.length === 0 ? (
+                            <p className="text-sm text-gray-400">過去の課題はありません</p>
+                        ) : (
+                            pastAssignments.map(assignment => {
+                                const progress = pastAssignmentProgress[assignment.id] || { completed: 0, total: 0, completedStudents: [], notCompletedStudents: [] };
+                                const percentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+                                const isExpanded = expandedPastAssignments.has(assignment.id);
+
+                                return (
+                                    <div
+                                        key={assignment.id}
+                                        className={`border border-gray-200 rounded-lg p-3 transition-all bg-gray-50 ${isExpanded ? 'ring-2 ring-gray-200' : ''}`}
+                                    >
+                                        <div
+                                            className="cursor-pointer"
+                                            onClick={() => togglePastAssignmentExpand(assignment.id)}
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded opacity-75">
+                                                        {assignment.subject}
+                                                    </span>
+                                                    {assignment.dueDate && (
+                                                        <span className="text-xs text-gray-500 ml-2">
+                                                            〆 {formatDate(assignment.dueDate)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-sm font-bold text-gray-700">
+                                                        {progress.completed} / {progress.total}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {percentage.toFixed(0)}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-gray-700 font-medium mb-2">
+                                                {assignment.content}
+                                            </div>
+                                            {/* Progress bar */}
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className="bg-indigo-500 h-2 rounded-full transition-all opacity-60"
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Expanded Details */}
+                                        {isExpanded && (
+                                            <div className="mt-4 pt-4 border-t border-gray-300 grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <div className="flex items-center gap-1 mb-2">
+                                                        <div className="w-2 h-2 rounded-full bg-green-500 opacity-75"></div>
+                                                        <span className="text-xs font-bold text-gray-600">達成者 ({progress.completedStudents?.length || 0})</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {progress.completedStudents?.length > 0 ? (
+                                                            progress.completedStudents.map(s => (
+                                                                <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-200 opacity-75">
+                                                                    {s.displayName || s.userName || '名前なし'}
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="text-xs text-gray-400 italic">なし</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1 mb-2">
+                                                        <div className="w-2 h-2 rounded-full bg-red-400 opacity-75"></div>
+                                                        <span className="text-xs font-bold text-gray-600">未達成者 ({progress.notCompletedStudents?.length || 0})</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {progress.notCompletedStudents?.length > 0 ? (
+                                                            progress.notCompletedStudents.map(s => (
+                                                                <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-200 opacity-75">
+                                                                    {s.displayName || s.userName || '名前なし'}
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="text-xs text-gray-400 italic">なし</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
