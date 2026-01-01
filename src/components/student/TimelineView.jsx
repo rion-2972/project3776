@@ -42,6 +42,19 @@ const TimelineView = () => {
         });
     };
 
+    const formatDuration = (minutes) => {
+        if (!minutes) return '0分';
+        if (minutes < 60) {
+            return `${minutes}分`;
+        } else {
+            const hours = Math.floor(minutes / 60);
+            const remainingMinutes = minutes % 60;
+            return remainingMinutes > 0 
+                ? `${hours}時間${remainingMinutes}分`
+                : `${hours}時間`;
+        }
+    };
+
     if (loading) {
         return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
     }
@@ -66,9 +79,6 @@ const TimelineView = () => {
                                     <div className="font-bold text-gray-900 text-sm">
                                         {record.userName || 'Unknown User'}
                                     </div>
-                                    <div className="text-xs text-gray-500">
-                                        {record.userType === 'bunken' ? '文系' : record.userType === 'riken' ? '理系' : ''}
-                                    </div>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1 text-xs text-gray-400">
@@ -78,12 +88,12 @@ const TimelineView = () => {
                         </div>
 
                         <div className="pl-10">
-                            <div className="flex flex-wrap gap-2 mb-2">
-                                <span className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded">
+                            <div className="flex flex-wrap gap-3 mb-2">
+                                <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-sm font-bold rounded">
                                     {record.subject}
                                 </span>
-                                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                                    {record.duration}分
+                                <span className="px-3 py-1.5 bg-gray-200 text-gray-800 text-sm font-bold rounded">
+                                    {formatDuration(record.duration)}
                                 </span>
                             </div>
 
