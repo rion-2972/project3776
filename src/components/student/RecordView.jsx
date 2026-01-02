@@ -3,12 +3,14 @@ import { BookOpen, Send, Plus } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
 import TimeInput from './TimeInput'; // Import the new component
 import { X } from 'lucide-react';
 
 const RecordView = ({ preFillData, onPreFillApplied }) => {
     const { profile, user } = useAuth();
+    const { t } = useLanguage();
 
     // Form State
     const [record, setRecord] = useState({
@@ -139,7 +141,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
             setIsAddBookModalOpen(false);
         } catch (error) {
             console.error('Error adding book:', error);
-            alert('参考書の追加に失敗しました。');
+            alert(t('addBookFailed'));
         } finally {
             setAddingBook(false);
         }
@@ -149,7 +151,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!record.subject || !record.selectedItem || !record.duration) {
-            alert('教科、内容、時間を入力してください');
+            alert(t('fillRequired'));
             return;
         }
 
@@ -169,7 +171,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 userType: profile.type || 'riken'
             });
 
-            alert('学習記録を保存しました！');
+            alert(t('recordSaved'));
 
             setRecord({
                 subject: '',
@@ -180,7 +182,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
             });
         } catch (error) {
             console.error('Error saving record:', error);
-            alert('保存に失敗しました。もう一度お試しください。');
+            alert(t('saveFailed'));
         } finally {
             setSubmitting(false);
         }
@@ -193,7 +195,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
             <div className="p-6 border-b border-gray-100 bg-indigo-50">
                 <h2 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
                     <BookOpen className="w-6 h-6" />
-                    学習を記録する
+                    {t('recordStudy')}
                 </h2>
             </div>
 
@@ -201,11 +203,11 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 {/* Subject Selection */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        教科 <span className="text-red-500">*</span>
+                        {t('subjectLabel')} <span className="text-red-500">{t('required')}</span>
                     </label>
 
                     <div className="mb-4">
-                        <span className="text-xs font-bold text-gray-400 block mb-2">共通科目</span>
+                        <span className="text-xs font-bold text-gray-400 block mb-2">{t('commonSubjects')}</span>
                         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                             {SUBJECT_GROUPS.common.map(sub => (
                                 <button
@@ -225,7 +227,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
 
                     <div>
                         <span className="text-xs font-bold text-gray-400 block mb-2">
-                            {profile?.type === 'bunken' ? '文系科目' : '理系科目'}
+                            {profile?.type === 'bunken' ? t('bunkenSubjects') : t('rikenSubjects')}
                         </span>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {specializedSubjects.map(sub => (
@@ -248,18 +250,18 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 {/* Content (Tasks & Books) */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        内容 <span className="text-red-500">*</span>
+                        {t('contentLabel')} <span className="text-red-500">{t('required')}</span>
                     </label>
 
                     {!record.subject ? (
                         <div className="text-sm text-gray-400 bg-gray-50 p-4 rounded-lg text-center">
-                            教科を選択すると表示されます
+                            {t('selectSubjectFirst')}
                         </div>
                     ) : (
                         <div className="space-y-4 animate-fade-in-down">
                             {/* Tasks */}
                             <div>
-                                <span className="text-xs font-bold text-gray-400 block mb-2">タスク</span>
+                                <span className="text-xs font-bold text-gray-400 block mb-2">{t('tasks')}</span>
                                 <div className="flex flex-wrap gap-2">
                                     {TASKS.map(task => (
                                         <button
@@ -280,19 +282,19 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                             {/* Reference Books */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-bold text-gray-400">参考書（{record.subject}）</span>
+                                    <span className="text-xs font-bold text-gray-400">{t('referenceBookLabel')}（{record.subject}）</span>
                                     <button
                                         type="button"
                                         onClick={() => setIsAddBookModalOpen(true)}
                                         className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800"
                                     >
                                         <Plus className="w-3 h-3" />
-                                        追加
+                                        {t('add')}
                                     </button>
                                 </div>
 
                                 {currentSubjectBooks.length === 0 ? (
-                                    <p className="text-xs text-gray-400 mb-2">登録された参考書はありません</p>
+                                    <p className="text-xs text-gray-400 mb-2">{t('noReferenceBooks')}</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
                                         {currentSubjectBooks.map(book => (
@@ -315,14 +317,14 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                             {/* Details Input */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">
-                                    詳細（ページ数など）
+                                    {t('detailsLabel')}
                                 </label>
                                 <input
                                     type="text"
                                     name="contentDetails"
                                     value={record.contentDetails}
                                     onChange={handleChange}
-                                    placeholder="例：P.30〜45"
+                                    placeholder={t('detailsPlaceholder')}
                                     className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-2 sm:text-sm"
                                 />
                             </div>
@@ -333,7 +335,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 {/* Time Input (Enhanced) */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        学習時間 <span className="text-red-500">*</span>
+                        {t('studyTimeLabel')} <span className="text-red-500">{t('required')}</span>
                     </label>
                     <TimeInput value={record.duration} onChange={handleDurationChange} initialMode={initialMode} />
                 </div>
@@ -341,13 +343,13 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 {/* Comment */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ひとこと
+                        {t('commentLabel')}
                     </label>
                     <textarea
                         name="comment"
                         value={record.comment}
                         onChange={handleChange}
-                        placeholder="集中できた！難しかった、など"
+                        placeholder={t('commentPlaceholder')}
                         rows="3"
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -360,7 +362,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                     className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-indigo-700 transition shadow-md hover:shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                     <Send className="w-5 h-5" />
-                    {submitting ? '記録中...' : '記録する'}
+                    {submitting ? t('recording') : t('recordButton')}
                 </button>
             </form>
 
@@ -369,7 +371,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">参考書を追加</h3>
+                            <h3 className="text-lg font-bold text-gray-900">{t('addReferenceBook')}</h3>
                             <button
                                 onClick={() => setIsAddBookModalOpen(false)}
                                 className="text-gray-400 hover:text-gray-600"
@@ -379,7 +381,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                         </div>
 
                         <p className="text-sm text-gray-500 mb-4">
-                            科目: <span className="font-semibold text-indigo-600">{record.subject}</span>
+                            {t('subjectColon')}: <span className="font-semibold text-indigo-600">{record.subject}</span>
                         </p>
 
                         <form onSubmit={handleAddBook}>
@@ -388,7 +390,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                                     type="text"
                                     value={newBookName}
                                     onChange={(e) => setNewBookName(e.target.value)}
-                                    placeholder="参考書の名前"
+                                    placeholder={t('bookNamePlaceholder')}
                                     className="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
                                     autoFocus
                                 />
@@ -400,14 +402,14 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                                     onClick={() => setIsAddBookModalOpen(false)}
                                     className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
                                 >
-                                    キャンセル
+                                    {t('cancel')}
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={!newBookName.trim() || addingBook}
                                     className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300"
                                 >
-                                    追加
+                                    {t('add')}
                                 </button>
                             </div>
                         </form>

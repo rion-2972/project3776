@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc, where, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit } from 'lucide-react';
 
 // --- Sub-component: Daily Study Hours ---
 const DailyStudyHours = ({ uid }) => {
+    const { t } = useLanguage();
     const [todayMinutes, setTodayMinutes] = useState(0);
     const [loading, setLoading] = useState(true);
     const [showCalendar, setShowCalendar] = useState(false);
@@ -65,9 +67,9 @@ const DailyStudyHours = ({ uid }) => {
 
     const formatTime = (minutes) => {
         if (minutes < 60) {
-            return `${minutes}分`;
+            return `${minutes}${t('minutes')}`;
         } else {
-            return `${(minutes / 60).toFixed(1)}時間`;
+            return `${(minutes / 60).toFixed(1)}${t('hours')}`;
         }
     };
 
@@ -104,7 +106,7 @@ const DailyStudyHours = ({ uid }) => {
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">今日の学習時間</h3>
+                        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('todayStudyTime')}</h3>
                         <div className="text-3xl font-bold text-indigo-600">
                             {loading ? '...' : formatTime(todayMinutes)}
                         </div>
@@ -175,6 +177,7 @@ const DailyStudyHours = ({ uid }) => {
 
 // --- Sub-component: Shared Assignments ---
 const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
+    const { t } = useLanguage();
     const [assignments, setAssignments] = useState([]);
     const [pastAssignments, setPastAssignments] = useState([]);
     const [myStatus, setMyStatus] = useState({});
@@ -195,11 +198,11 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             const userSubjects = profile?.subjects || [];
             const current = [];
             const past = [];
-            
+
             data.forEach(a => {
                 // Filter by subject
                 if (!userSubjects.includes(a.subject)) return;
-                
+
                 if (a.dueDate) {
                     const dueDate = new Date(a.dueDate);
                     // Past assignments: oneWeekAgo <= dueDate < now
@@ -215,7 +218,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                     current.push(a);
                 }
             });
-            
+
             setAssignments(current);
             setPastAssignments(past);
         });
@@ -238,15 +241,15 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
         });
         return () => unsubscribe();
     }, [user]);
-    
+
     // Helper function to check if assignment was completed within deadline
     const isCompletedWithinDeadline = (assignment, statusData) => {
         if (!statusData || !statusData.completed) return false;
         if (!assignment.dueDate || !statusData.updatedAt) return false;
-        
+
         const deadline = new Date(assignment.dueDate);
         deadline.setHours(23, 59, 59, 999); // End of deadline day
-        
+
         const completedAt = statusData.updatedAt.toDate();
         return completedAt <= deadline;
     };
@@ -259,7 +262,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             updatedAt: serverTimestamp()
         });
     };
-    
+
     // Format date for display (YYYY-MM-DD format)
     const formatDate = (dateString) => {
         if (!dateString) return '';
@@ -308,9 +311,9 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     return (
         <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-bold text-gray-900">クラスの課題</h2>
+                <h2 className="text-lg font-bold text-gray-900">{t('classAssignments')}</h2>
                 <button onClick={() => setIsAdding(!isAdding)} className="text-indigo-600 text-sm font-bold flex items-center gap-1">
-                    <Plus className="w-4 h-4" /> 追加
+                    <Plus className="w-4 h-4" /> {t('add')}
                 </button>
             </div>
 
@@ -322,12 +325,12 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         onChange={e => setNewAssign({ ...newAssign, subject: e.target.value })}
                         required
                     >
-                        <option value="">科目を選択</option>
+                        <option value="">{t('selectSubject')}</option>
                         {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <input
                         className="block w-full mb-2 p-2 rounded border-gray-300 text-sm"
-                        placeholder="課題内容"
+                        placeholder={t('assignmentContent')}
                         value={newAssign.content}
                         onChange={e => setNewAssign({ ...newAssign, content: e.target.value })}
                         required
@@ -338,12 +341,12 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         value={newAssign.dueDate}
                         onChange={e => setNewAssign({ ...newAssign, dueDate: e.target.value })}
                     />
-                    <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded text-sm font-bold">追加する</button>
+                    <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded text-sm font-bold">{t('addAssignment')}</button>
                 </form>
             )}
 
             <div className="space-y-2">
-                {assignments.length === 0 ? <p className="text-sm text-gray-400">課題はありません</p> :
+                {assignments.length === 0 ? <p className="text-sm text-gray-400">{t('noAssignments')}</p> :
                     // Sort: uncompleted first, completed last
                     [...assignments].sort((a, b) => {
                         const aCompleted = myStatus[a.id]?.completed || false;
@@ -364,12 +367,12 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                             value={editForm.subject}
                                             onChange={e => setEditForm({ ...editForm, subject: e.target.value })}
                                         >
-                                            <option value="">科目を選択</option>
+                                            <option value="">{t('selectSubject')}</option>
                                             {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                         <input
                                             className="block w-full p-2 rounded border-gray-300 text-sm"
-                                            placeholder="課題内容"
+                                            placeholder={t('assignmentContent')}
                                             value={editForm.content}
                                             onChange={e => setEditForm({ ...editForm, content: e.target.value })}
                                         />
@@ -384,13 +387,13 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                                 onClick={() => handleEditSave(a.id)}
                                                 className="flex-1 bg-indigo-600 text-white py-2 rounded text-sm font-bold"
                                             >
-                                                保存
+                                                {t('save')}
                                             </button>
                                             <button
                                                 onClick={() => setEditingId(null)}
                                                 className="flex-1 bg-gray-100 text-gray-700 py-2 rounded text-sm font-bold"
                                             >
-                                                キャンセル
+                                                {t('cancel')}
                                             </button>
                                         </div>
                                     </div>
@@ -434,7 +437,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                     ))
                 }
             </div>
-            
+
             {/* Past Assignments Section */}
             {pastAssignments.length > 0 && (
                 <div className="mt-4">
@@ -442,9 +445,9 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         onClick={() => setShowPastAssignments(!showPastAssignments)}
                         className="w-full text-sm text-indigo-600 font-bold py-2 px-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition"
                     >
-                        {showPastAssignments ? '過去の課題を非表示にする' : '過去の課題を確認する'}
+                        {showPastAssignments ? t('hidePastAssignments') : t('showPastAssignments')}
                     </button>
-                    
+
                     {showPastAssignments && (
                         <div className="mt-3 space-y-2">
                             {[...pastAssignments].sort((a, b) => {
@@ -455,7 +458,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                             }).map(a => {
                                 const statusData = myStatus[a.id];
                                 const completedWithinDeadline = isCompletedWithinDeadline(a, statusData);
-                                
+
                                 return (
                                     <div key={a.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200">
                                         {/* Read-only completion indicator */}
@@ -488,6 +491,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
 
 // --- Sub-component: My Plans ---
 const MyPlansSection = ({ user, profile }) => {
+    const { t } = useLanguage();
     const [plans, setPlans] = useState([]);
     const [newPlan, setNewPlan] = useState({ date: '', subject: '', content: '' });
 
@@ -525,7 +529,7 @@ const MyPlansSection = ({ user, profile }) => {
 
     return (
         <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">マイプラン</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">{t('myPlans')}</h2>
 
             {/* Add Plan Form */}
             <form onSubmit={handleAdd} className="bg-white p-3 rounded-lg border border-gray-200 mb-4 text-sm">
@@ -543,18 +547,18 @@ const MyPlansSection = ({ user, profile }) => {
                         onChange={e => setNewPlan({ ...newPlan, subject: e.target.value })}
                         required
                     >
-                        <option value="">科目</option>
+                        <option value="">{t('planSubject')}</option>
                         {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <input
                     className="w-full p-2 border rounded mb-2"
-                    placeholder="やることを入力"
+                    placeholder={t('planContent')}
                     value={newPlan.content}
                     onChange={e => setNewPlan({ ...newPlan, content: e.target.value })}
                     required
                 />
-                <button type="submit" className="w-full bg-gray-800 text-white py-2 rounded font-medium text-xs">プランに追加</button>
+                <button type="submit" className="w-full bg-gray-800 text-white py-2 rounded font-medium text-xs">{t('addToPlan')}</button>
             </form>
 
             <div className="space-y-2">
