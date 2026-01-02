@@ -1,0 +1,80 @@
+import React from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { X, BarChart3, Settings } from 'lucide-react';
+
+const Sidebar = ({ isOpen, onClose, userName, onNavigate }) => {
+    const { t } = useLanguage();
+
+    const handleNavigation = (view) => {
+        onNavigate(view);
+        onClose();
+    };
+
+    return (
+        <>
+            {/* Backdrop */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+                    onClick={onClose}
+                />
+            )}
+
+            {/* Sidebar */}
+            <div
+                className={`fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                    }`}
+            >
+                <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                        <div>
+                            <div className="text-xs text-gray-500 mb-1">{t('sidebarWelcome')}</div>
+                            <div className="text-lg font-bold text-gray-900">{userName}</div>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-2 hover:bg-gray-100 rounded-full transition"
+                        >
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="flex-1 p-4">
+                        <nav className="space-y-2">
+                            <button
+                                onClick={() => handleNavigation('statistics')}
+                                className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 transition group"
+                            >
+                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
+                                    <BarChart3 className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">{t('sidebarStatistics')}</span>
+                            </button>
+
+                            <button
+                                onClick={() => handleNavigation('settings')}
+                                className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100 transition group"
+                            >
+                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
+                                    <Settings className="w-5 h-5 text-gray-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">{t('sidebarSettings')}</span>
+                            </button>
+                        </nav>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-4 border-t border-gray-200">
+                        <div className="text-xs text-gray-400 text-center">
+                            {t('appName')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
+export default Sidebar;

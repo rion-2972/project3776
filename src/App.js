@@ -1,6 +1,7 @@
 // src/App.js
 import React from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Auth from './components/Auth';
 import ProfileSetup from './components/ProfileSetup';
 import StudentApp from './components/StudentApp';
@@ -43,9 +44,12 @@ const AppContent = () => {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
     </AuthProvider>
   );
 }
 
 export default App;
+
