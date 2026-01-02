@@ -64,7 +64,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
             setMinutes(m);
             setVisualMinutes(m);
         }
-    }, [value,hours,minutes]);
+    }, [value, hours, minutes]);
 
     // 2. Scroll to position when visual values change (initial load or external update)
     // We use detailed dependency tracking to avoid fighting user scroll
@@ -80,7 +80,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
                 setTimeout(() => { isScrollingProgrammatically.current = false; }, 100);
             }
         }
-    }, [visualHours,hourOptions,ITEM_HEIGHT]); // Dependencies: only when the *intent* changes
+    }, [visualHours, hourOptions, ITEM_HEIGHT]); // Dependencies: only when the *intent* changes
 
     useEffect(() => {
         if (!minutesScrollRef.current) return;
@@ -165,21 +165,63 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
         onChange(visualHours * 60 + newMin);
     };
 
-    // --- Stopwatch Logic (unchanged) ---
-    const [isRunning, setIsRunning] = useState(false);
-    const [secondsState, setSecondsState] = useState(0); // Renamed to avoid confusion with minutes
+    // --- Stopwatch Logic (Time-based with localStorage) ---
+    const STORAGE_KEY = 'project3776_stopwatch_state';
 
+    const [isRunning, setIsRunning] = useState(false);
+    const [startTime, setStartTime] = useState(null); // Timestamp when started/resumed
+    const [accumulatedSeconds, setAccumulatedSeconds] = useState(0); // Total paused time
+    const [displaySeconds, setDisplaySeconds] = useState(0); // Current display value
+
+    // Load state from localStorage on mount
     useEffect(() => {
-        let interval = null;
-        if (isRunning) {
-            interval = setInterval(() => {
-                setSecondsState(prev => prev + 1);
-            }, 1000);
-        } else {
-            clearInterval(interval);
+        const savedState = localStorage.getItem(STORAGE_KEY);
+        if (savedState) {
+            try {
+                const { isRunning: savedRunning, startTime: savedStart, accumulatedSeconds: savedAccum } = JSON.parse(savedState);
+
+                if (savedRunning && savedStart) {
+                    // Was running when page closed - calculate elapsed time
+                    const elapsed = Math.floor((Date.now() - savedStart) / 1000);
+                    setAccumulatedSeconds(savedAccum + elapsed);
+                    setStartTime(Date.now()); // Reset start time to now
+                    setIsRunning(true);
+                } else if (savedAccum > 0) {
+                    // Was paused - restore accumulated time
+                    setAccumulatedSeconds(savedAccum);
+                    setDisplaySeconds(savedAccum);
+                }
+            } catch (e) {
+                console.error('Failed to parse stopwatch state:', e);
+            }
         }
+    }, []);
+
+    // Save state to localStorage whenever it changes
+    useEffect(() => {
+        const state = {
+            isRunning,
+            startTime,
+            accumulatedSeconds
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }, [isRunning, startTime, accumulatedSeconds]);
+
+    // Update display every second when running
+    useEffect(() => {
+        if (!isRunning || !startTime) {
+            setDisplaySeconds(accumulatedSeconds);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            setDisplaySeconds(accumulatedSeconds + elapsed);
+        }, 1000);
+
         return () => clearInterval(interval);
-    }, [isRunning]);
+    }, [isRunning, startTime, accumulatedSeconds]);
 
     const formatStopwatch = (totalSeconds) => {
         const h = Math.floor(totalSeconds / 3600);
@@ -188,18 +230,42 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
+    const toggleStopwatch = () => {
+        if (isRunning) {
+            // Pause: save accumulated time
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            setAccumulatedSeconds(accumulatedSeconds + elapsed);
+            setIsRunning(false);
+            setStartTime(null);
+        } else {
+            // Start/Resume: set new start time
+            setStartTime(Date.now());
+            setIsRunning(true);
+        }
+    };
+
     const applyStopwatch = () => {
-        const mins = Math.max(1, Math.floor(secondsState / 60));
+        const mins = Math.max(1, Math.floor(displaySeconds / 60));
         onChange(mins);
+
+        // Reset everything
         setIsRunning(false);
-        setSecondsState(0);
+        setStartTime(null);
+        setAccumulatedSeconds(0);
+        setDisplaySeconds(0);
+        localStorage.removeItem(STORAGE_KEY);
+
         alert(`ストップウォッチの記録（${mins}分）をセットしました`);
         setMode('manual');
     };
 
     const resetStopwatch = () => {
         setIsRunning(false);
-        setSecondsState(0);
+        setStartTime(null);
+        setAccumulatedSeconds(0);
+        setDisplaySeconds(0);
+        localStorage.removeItem(STORAGE_KEY);
     };
 
     return (
@@ -302,13 +368,13 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
             ) : (
                 <div className="text-center py-4">
                     <div className="text-5xl font-mono font-bold text-gray-900 mb-6 tracking-wider">
-                        {formatStopwatch(secondsState)}
+                        {formatStopwatch(displaySeconds)}
                     </div>
 
                     <div className="flex justify-center gap-4 mb-6">
                         <button
                             type="button"
-                            onClick={() => setIsRunning(!isRunning)}
+                            onClick={toggleStopwatch}
                             className={`w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg ${isRunning
                                 ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
                                 : 'bg-green-500 hover:bg-green-600 text-white'
@@ -320,7 +386,7 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
                         <button
                             type="button"
                             onClick={resetStopwatch}
-                            disabled={secondsState === 0 && !isRunning}
+                            disabled={displaySeconds === 0 && !isRunning}
                             className="w-16 h-16 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
                         >
                             <RotateCcw className="w-6 h-6" />
@@ -330,13 +396,13 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
                     <button
                         type="button"
                         onClick={applyStopwatch}
-                        disabled={secondsState < 60}
+                        disabled={displaySeconds < 60}
                         className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-gray-300 transition"
                     >
                         <Check className="w-5 h-5" />
-                        この時間を入力 ({Math.floor(secondsState / 60)}分)
+                        この時間を入力 ({Math.floor(displaySeconds / 60)}分)
                     </button>
-                    {secondsState > 0 && secondsState < 60 && <p className="text-xs text-red-500 mt-2">※1分以上から記録可能です</p>}
+                    {displaySeconds > 0 && displaySeconds < 60 && <p className="text-xs text-red-500 mt-2">※1分以上から記録可能です</p>}
                 </div>
             )}
 
