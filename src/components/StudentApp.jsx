@@ -89,18 +89,21 @@ const StudentApp = () => {
   const showBottomNav = !activeView; // Hide bottom nav when in sidebar views
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Sidebar - Mobile: Modal, Desktop: Always visible */}
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         userName={profile?.displayName}
         onNavigate={handleSidebarNavigation}
+        activeView={activeView}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
-      {/* Header - only show for main tabs */}
+      {/* Header - only show for main tabs, hidden on desktop */}
       {showHeader && (
-        <header className="bg-white shadow-sm sticky top-0 z-10">
+        <header className="bg-white shadow-sm sticky top-0 z-10 md:hidden">
           <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
             {/* Left: Hamburger */}
             <button
@@ -122,13 +125,13 @@ const StudentApp = () => {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${showBottomNav ? 'max-w-md mx-auto w-full p-4 pb-24' : ''}`}>
+      <main className={`flex-1 w-full ${showBottomNav ? 'max-w-md mx-auto md:max-w-none p-4 pb-24 md:pb-4' : 'md:p-8'}`}>
         {renderContent()}
       </main>
 
-      {/* Bottom Tab Navigation - only show for main tabs */}
+      {/* Bottom Tab Navigation - only show for main tabs on mobile */}
       {showBottomNav && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-safe">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-safe md:hidden">
           <div className="max-w-md mx-auto flex justify-around">
             <button
               onClick={() => setActiveTab('record')}

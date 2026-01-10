@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Check } from 'lucide-react';
 
-const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
+const TimeInput = ({ value, onChange, initialMode = 'manual', resetTrigger = 0 }) => {
     const [mode, setMode] = useState(initialMode); // 'manual' | 'stopwatch'
 
     // Apply initialMode when it changes (e.g., from assignment click)
@@ -223,6 +223,21 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
         return () => clearInterval(interval);
     }, [isRunning, startTime, accumulatedSeconds]);
 
+    // Sync stopwatch time to parent component in real-time
+    useEffect(() => {
+        if (mode === 'stopwatch' && displaySeconds >= 60) {
+            const mins = Math.floor(displaySeconds / 60);
+            onChange(mins);
+        }
+    }, [mode, displaySeconds, onChange]);
+
+    // Reset stopwatch when parent triggers reset (e.g., after successful record submission)
+    useEffect(() => {
+        if (resetTrigger > 0) {
+            resetStopwatch();
+        }
+    }, [resetTrigger]);
+
     const formatStopwatch = (totalSeconds) => {
         const h = Math.floor(totalSeconds / 3600);
         const m = Math.floor((totalSeconds % 3600) / 60);
@@ -248,6 +263,12 @@ const TimeInput = ({ value, onChange, initialMode = 'manual' }) => {
     const applyStopwatch = () => {
         const mins = Math.max(1, Math.floor(displaySeconds / 60));
         onChange(mins);
+
+        // Check if the time is not divisible by 5
+        // If so, switch to 1-minute step mode to avoid value reset
+        if (mins % 5 !== 0) {
+            setStep(1);
+        }
 
         // Reset everything
         setIsRunning(false);
