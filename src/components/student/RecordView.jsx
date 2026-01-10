@@ -23,6 +23,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
 
     const [submitting, setSubmitting] = useState(false);
     const [initialMode, setInitialMode] = useState('manual'); // For TimeInput
+    const [resetTrigger, setResetTrigger] = useState(0); // For resetting TimeInput stopwatch
 
     // Reference Books State
     const [referenceBooks, setReferenceBooks] = useState([]);
@@ -180,6 +181,9 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 duration: '',
                 comment: ''
             });
+
+            // Trigger stopwatch reset in TimeInput
+            setResetTrigger(prev => prev + 1);
         } catch (error) {
             console.error('Error saving record:', error);
             alert(t('saveFailed'));
@@ -337,7 +341,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         {t('studyTimeLabel')} <span className="text-red-500">{t('required')}</span>
                     </label>
-                    <TimeInput value={record.duration} onChange={handleDurationChange} initialMode={initialMode} />
+                    <TimeInput value={record.duration} onChange={handleDurationChange} initialMode={initialMode} resetTrigger={resetTrigger} />
                 </div>
 
                 {/* Comment */}

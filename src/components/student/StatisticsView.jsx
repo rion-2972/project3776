@@ -190,7 +190,7 @@ const StatisticsView = ({ onBack }) => {
                             const heightPercent = maxMinutes > 0 ? (totalMinutes / maxMinutes) * 100 : 0;
 
                             return (
-                                <div key={dayIndex} className="flex-1 flex flex-col items-center gap-1">
+                                <div key={dayIndex} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
                                     {/* Stacked Bar */}
                                     <div
                                         className="w-full relative flex flex-col-reverse rounded-t-lg overflow-hidden shadow-sm"

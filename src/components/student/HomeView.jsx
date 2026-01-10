@@ -592,10 +592,12 @@ const HomeView = ({ onAssignmentClick }) => {
     const { user, profile } = useAuth();
 
     return (
-        <div className="pb-20">
+        <div className="pb-20 md:pb-0">
             <DailyStudyHours uid={user.uid} />
-            <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
-            <MyPlansSection user={user} profile={profile} />
+            <div className="md:grid md:grid-cols-2 md:gap-6">
+                <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
+                <MyPlansSection user={user} profile={profile} />
+            </div>
         </div>
     );
 };

@@ -1,10 +1,10 @@
 export const SUBJECTS = [
-  '数学', '英語', '現代文', '古典', '物理', '化学', '生物', 
+  '数学', '英語', '現代文', '古典', '物理', '化学', '生物',
   '化学基礎', '生物基礎', '日本史', '世界史', '地理', '政治経済', '情報'
 ];
 
 export const TASKS = [
-  '課題', 'テスト訂正', '小テスト勉強', 
+  '課題', 'テスト勉強', '小テスト勉強',
   '授業の復習', '予習', '過去問演習'
 ];
 
@@ -20,7 +20,7 @@ export const SUBJECT_GROUPS = {
 
 export const getDefaultSubjects = (type, historyChoice = '日本史', scienceChoice = '物理') => {
   const subjects = [...SUBJECT_GROUPS.common];
-  
+
   if (type === 'bunken') {
     subjects.push(...SUBJECT_GROUPS.bunken);
     subjects.push(historyChoice);
@@ -28,6 +28,6 @@ export const getDefaultSubjects = (type, historyChoice = '日本史', scienceCho
     subjects.push(...SUBJECT_GROUPS.riken);
     subjects.push(scienceChoice);
   }
-  
+
   return subjects;
 };
