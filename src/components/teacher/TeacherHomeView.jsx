@@ -20,8 +20,8 @@ const DailyAggregatedStudyHours = () => {
     const [currentViewMonth, setCurrentViewMonth] = useState(new Date());
     const [monthlyData, setMonthlyData] = useState({});
     const [selectedCalendarDates, setSelectedCalendarDates] = useState(new Set());
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [selectedDateStudents, setSelectedDateStudents] = useState([]);
+    const [selectedDate] = useState(null);
+    const [selectedDateStudents] = useState([]);
     const [showStudentModal, setShowStudentModal] = useState(false);
 
     // Fetch yesterday's aggregated study hours
