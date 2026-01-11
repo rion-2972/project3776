@@ -13,24 +13,32 @@ import { Users, Calendar, BookOpen, TrendingUp, Award, X } from 'lucide-react';
 
 // --- Sub-component: Daily Aggregated Study Hours ---
 const DailyAggregatedStudyHours = () => {
-    const [todayTotalMinutes, setTodayTotalMinutes] = useState(0);
-    const [todayActiveCount, setTodayActiveCount] = useState(0);
+    const [yesterdayTotalMinutes, setYesterdayTotalMinutes] = useState(0);
+    const [yesterdayActiveCount, setYesterdayActiveCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [showCalendar, setShowCalendar] = useState(false);
     const [currentViewMonth, setCurrentViewMonth] = useState(new Date());
     const [monthlyData, setMonthlyData] = useState({});
+    const [selectedCalendarDates, setSelectedCalendarDates] = useState(new Set());
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedDateStudents, setSelectedDateStudents] = useState([]);
     const [showStudentModal, setShowStudentModal] = useState(false);
 
-    // Fetch today's aggregated study hours
+    // Fetch yesterday's aggregated study hours
     useEffect(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const startOfYesterday = new Date(now);
+        startOfYesterday.setDate(now.getDate() - 1);
+        startOfYesterday.setHours(0, 0, 0, 0);
+
+        const endOfYesterday = new Date(now);
+        endOfYesterday.setDate(now.getDate() - 1);
+        endOfYesterday.setHours(23, 59, 59, 999);
 
         const q = query(
             collectionGroup(db, 'studyRecords'),
-            where('createdAt', '>=', today)
+            where('createdAt', '>=', startOfYesterday),
+            where('createdAt', '<=', endOfYesterday)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -44,11 +52,11 @@ const DailyAggregatedStudyHours = () => {
                 uniqueUsers.add(userId);
             });
 
-            setTodayTotalMinutes(totalMinutes);
-            setTodayActiveCount(uniqueUsers.size);
+            setYesterdayTotalMinutes(totalMinutes);
+            setYesterdayActiveCount(uniqueUsers.size);
             setLoading(false);
         }, (error) => {
-            console.error('Error fetching today\'s aggregated study hours:', error);
+            console.error('Error fetching yesterday\'s aggregated study hours:', error);
             setLoading(false);
         });
 
@@ -81,6 +89,21 @@ const DailyAggregatedStudyHours = () => {
 
         return () => unsubscribe();
     }, [showCalendar, currentViewMonth]);
+
+    // Toggle date selection
+    const toggleDateSelection = (day) => {
+        if (!monthlyData[day]) return; // Only allow selection of days with data
+
+        setSelectedCalendarDates(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(day)) {
+                newSet.delete(day);
+            } else {
+                newSet.add(day);
+            }
+            return newSet;
+        });
+    };
 
     // Fetch student details for selected date
     const fetchStudentDetailsForDate = async (day) => {
@@ -126,6 +149,11 @@ const DailyAggregatedStudyHours = () => {
         }
     };
 
+    // Calculate total minutes for selected dates
+    const totalMinutesSelected = Array.from(selectedCalendarDates).reduce((sum, day) => {
+        return sum + (monthlyData[day] || 0);
+    }, 0);
+
     const getDaysInMonth = (date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -160,13 +188,13 @@ const DailyAggregatedStudyHours = () => {
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">
-                            今日の総学習時間
+                            昨日の総学習時間
                         </h3>
                         <div className="text-3xl font-bold text-indigo-600">
-                            {loading ? '...' : formatTime(todayTotalMinutes)}
+                            {loading ? '...' : formatTime(yesterdayTotalMinutes)}
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                            {todayActiveCount}人が記録
+                            {yesterdayActiveCount}人が記録
                         </p>
                     </div>
                     <button
@@ -206,11 +234,15 @@ const DailyAggregatedStudyHours = () => {
                         {getDaysInMonth(currentViewMonth).map((day, index) => (
                             <div
                                 key={index}
-                                className={`text-center p-2 rounded ${day && monthlyData[day]
-                                    ? 'hover:bg-indigo-50 cursor-pointer transition'
-                                    : day ? 'hover:bg-gray-50' : ''
+                                className={`text-center p-2 rounded transition ${selectedCalendarDates.has(day)
+                                    ? 'bg-indigo-200 ring-2 ring-indigo-500'
+                                    : day && monthlyData[day]
+                                        ? 'hover:bg-indigo-50 cursor-pointer'
+                                        : day
+                                            ? 'hover:bg-gray-50'
+                                            : ''
                                     }`}
-                                onClick={() => day && monthlyData[day] && fetchStudentDetailsForDate(day)}
+                                onClick={() => day && monthlyData[day] && toggleDateSelection(day)}
                             >
                                 {day && (
                                     <div>
@@ -229,6 +261,15 @@ const DailyAggregatedStudyHours = () => {
                             </div>
                         ))}
                     </div>
+
+                    {/* Selected Dates Total Study Time Display */}
+                    {selectedCalendarDates.size > 0 && (
+                        <div className="mt-4 p-3 bg-indigo-50 rounded-lg text-center">
+                            <span className="text-gray-700 font-bold">
+                                選択した日の合計学習時間：{Math.round(totalMinutesSelected / 60)}時間
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -391,7 +432,9 @@ const TeacherHomeView = () => {
                 }));
 
             const uniqueStudents = new Set(records.map(r => r.userId));
-            const avgHours = uniqueStudents.size > 0 ? totalHours / uniqueStudents.size : 0;
+            // Fixed denominator of 22 for average calculation
+            const FIXED_DENOMINATOR = 22;
+            const avgHours = totalHours / FIXED_DENOMINATOR;
 
             setWeeklyStats({
                 totalHours: totalHours.toFixed(1),
@@ -410,10 +453,10 @@ const TeacherHomeView = () => {
     const isCompletedWithinDeadline = useCallback((assignment, statusData) => {
         if (!statusData || !statusData.completed) return false;
         if (!assignment.dueDate || !statusData.updatedAt) return false;
-        
+
         const deadline = new Date(assignment.dueDate);
         deadline.setHours(23, 59, 59, 999); // End of deadline day
-        
+
         const completedAt = statusData.updatedAt.toDate();
         return completedAt <= deadline;
     }, []);
@@ -479,7 +522,7 @@ const TeacherHomeView = () => {
                             where('assignmentId', '==', assignment.id)
                         )
                     );
-                    
+
                     if (!statusDoc.empty) {
                         const statusData = statusDoc.docs[0].data();
                         // Check if completed within deadline
@@ -592,10 +635,10 @@ const TeacherHomeView = () => {
     const formatDate = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
-        return date.toLocaleDateString('ja-JP', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
+        return date.toLocaleDateString('ja-JP', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
         });
     };
 
@@ -754,101 +797,101 @@ const TeacherHomeView = () => {
                         </button>
                     </div>
 
-                <div className="space-y-3">
-                    {assignments.length === 0 ? (
-                        <p className="text-sm text-gray-400">課題はありません</p>
-                    ) : (
-                        assignments.map(assignment => {
-                            const progress = assignmentProgress[assignment.id] || { completed: 0, total: 0, completedStudents: [], notCompletedStudents: [] };
-                            const percentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
-                            const isExpanded = expandedAssignments.has(assignment.id);
+                    <div className="space-y-3">
+                        {assignments.length === 0 ? (
+                            <p className="text-sm text-gray-400">課題はありません</p>
+                        ) : (
+                            assignments.map(assignment => {
+                                const progress = assignmentProgress[assignment.id] || { completed: 0, total: 0, completedStudents: [], notCompletedStudents: [] };
+                                const percentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+                                const isExpanded = expandedAssignments.has(assignment.id);
 
-                            return (
-                                <div
-                                    key={assignment.id}
-                                    className={`border border-gray-200 rounded-lg p-3 transition-all ${isExpanded ? 'bg-gray-50 ring-2 ring-indigo-100' : 'bg-white'}`}
-                                >
+                                return (
                                     <div
-                                        className="cursor-pointer"
-                                        onClick={() => toggleAssignmentExpand(assignment.id)}
+                                        key={assignment.id}
+                                        className={`border border-gray-200 rounded-lg p-3 transition-all ${isExpanded ? 'bg-gray-50 ring-2 ring-indigo-100' : 'bg-white'}`}
                                     >
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                                                    {assignment.subject}
-                                                </span>
-                                                {assignment.dueDate && (
-                                                    <span className="text-xs text-gray-400 ml-2">
-                                                        〆 {assignment.dueDate}
+                                        <div
+                                            className="cursor-pointer"
+                                            onClick={() => toggleAssignmentExpand(assignment.id)}
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                                        {assignment.subject}
                                                     </span>
-                                                )}
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-sm font-bold text-gray-900">
-                                                    {progress.completed} / {progress.total}
+                                                    {assignment.dueDate && (
+                                                        <span className="text-xs text-gray-400 ml-2">
+                                                            〆 {assignment.dueDate}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="text-xs text-gray-500">
-                                                    {percentage.toFixed(0)}%
+                                                <div className="text-right">
+                                                    <div className="text-sm font-bold text-gray-900">
+                                                        {progress.completed} / {progress.total}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {percentage.toFixed(0)}%
+                                                    </div>
                                                 </div>
                                             </div>
+                                            <div className="text-sm text-gray-800 font-medium mb-2">
+                                                {assignment.content}
+                                            </div>
+                                            {/* Progress bar */}
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className="bg-indigo-600 h-2 rounded-full transition-all"
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-gray-800 font-medium mb-2">
-                                            {assignment.content}
-                                        </div>
-                                        {/* Progress bar */}
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div
-                                                className="bg-indigo-600 h-2 rounded-full transition-all"
-                                                style={{ width: `${percentage}%` }}
-                                            />
-                                        </div>
-                                    </div>
 
-                                    {/* Expanded Details */}
-                                    {isExpanded && (
-                                        <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-4">
-                                            <div>
-                                                <div className="flex items-center gap-1 mb-2">
-                                                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                    <span className="text-xs font-bold text-gray-600">達成者 ({progress.completedStudents?.length || 0})</span>
+                                        {/* Expanded Details */}
+                                        {isExpanded && (
+                                            <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <div className="flex items-center gap-1 mb-2">
+                                                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                        <span className="text-xs font-bold text-gray-600">達成者 ({progress.completedStudents?.length || 0})</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {progress.completedStudents?.length > 0 ? (
+                                                            progress.completedStudents.map(s => (
+                                                                <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-100">
+                                                                    {s.displayName || s.userName || '名前なし'}
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="text-xs text-gray-400 italic">なし</div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    {progress.completedStudents?.length > 0 ? (
-                                                        progress.completedStudents.map(s => (
-                                                            <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-100">
-                                                                {s.displayName || s.userName || '名前なし'}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <div className="text-xs text-gray-400 italic">なし</div>
-                                                    )}
+                                                <div>
+                                                    <div className="flex items-center gap-1 mb-2">
+                                                        <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                                                        <span className="text-xs font-bold text-gray-600">未達成者 ({progress.notCompletedStudents?.length || 0})</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {progress.notCompletedStudents?.length > 0 ? (
+                                                            progress.notCompletedStudents.map(s => (
+                                                                <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-100">
+                                                                    {s.displayName || s.userName || '名前なし'}
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="text-xs text-gray-400 italic">なし</div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <div className="flex items-center gap-1 mb-2">
-                                                    <div className="w-2 h-2 rounded-full bg-red-400"></div>
-                                                    <span className="text-xs font-bold text-gray-600">未達成者 ({progress.notCompletedStudents?.length || 0})</span>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    {progress.notCompletedStudents?.length > 0 ? (
-                                                        progress.notCompletedStudents.map(s => (
-                                                            <div key={s.id} className="text-xs text-gray-700 bg-white p-1.5 rounded border border-gray-100">
-                                                                {s.displayName || s.userName || '名前なし'}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <div className="text-xs text-gray-400 italic">なし</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
-                    )}
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
-            </div>
             ) : (
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 opacity-75">
                     <div className="flex items-center justify-between mb-4">
