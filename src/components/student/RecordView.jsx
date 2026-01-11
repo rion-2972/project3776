@@ -4,7 +4,7 @@ import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, Timest
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { SUBJECT_GROUPS, LEVEL_SUBJECTS, TASKS } from '../../utils/constants';
+import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
 import TimeInput from './TimeInput'; // Import the new component
 import { X } from 'lucide-react';
 
