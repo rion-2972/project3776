@@ -105,41 +105,7 @@ const DailyAggregatedStudyHours = () => {
         });
     };
 
-    // Fetch student details for selected date
-    const fetchStudentDetailsForDate = async (day) => {
-        const year = currentViewMonth.getFullYear();
-        const month = currentViewMonth.getMonth();
-        const dateStart = new Date(year, month, day, 0, 0, 0);
-        const dateEnd = new Date(year, month, day, 23, 59, 59);
 
-        const q = query(
-            collectionGroup(db, 'studyRecords'),
-            where('createdAt', '>=', dateStart),
-            where('createdAt', '<=', dateEnd)
-        );
-
-        const snapshot = await getDocs(q);
-        const studentData = {};
-
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            const userId = doc.ref.parent.parent.id;
-
-            if (!studentData[userId]) {
-                studentData[userId] = {
-                    userId,
-                    userName: data.userName || '不明',
-                    totalMinutes: 0
-                };
-            }
-            studentData[userId].totalMinutes += (data.duration || 0);
-        });
-
-        const studentsList = Object.values(studentData).sort((a, b) => b.totalMinutes - a.totalMinutes);
-        setSelectedDateStudents(studentsList);
-        setSelectedDate(day);
-        setShowStudentModal(true);
-    };
 
     const formatTime = (minutes) => {
         if (minutes < 60) {
@@ -431,7 +397,7 @@ const TeacherHomeView = () => {
                     hours: (minutes / 60).toFixed(1)
                 }));
 
-            const uniqueStudents = new Set(records.map(r => r.userId));
+
             // Fixed denominator of 22 for average calculation
             const FIXED_DENOMINATOR = 22;
             const avgHours = totalHours / FIXED_DENOMINATOR;
