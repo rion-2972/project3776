@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Send, Plus } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
+import { SUBJECT_GROUPS, LEVEL_SUBJECTS, TASKS } from '../../utils/constants';
 import TimeInput from './TimeInput'; // Import the new component
 import { X } from 'lucide-react';
 
@@ -24,6 +24,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
     const [submitting, setSubmitting] = useState(false);
     const [initialMode, setInitialMode] = useState('manual'); // For TimeInput
     const [resetTrigger, setResetTrigger] = useState(0); // For resetting TimeInput stopwatch
+    const [customDate, setCustomDate] = useState(''); // For optional date selection
 
     // Reference Books State
     const [referenceBooks, setReferenceBooks] = useState([]);
@@ -98,6 +99,15 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
 
     const specializedSubjects = getSpecializedSubjects();
 
+    // Get user's Math and English level subjects
+    const getUserLevelSubjects = () => {
+        const mathSubject = profile?.subjects?.find(s => s.startsWith('数学')) || '数学（標準）';
+        const englishSubject = profile?.subjects?.find(s => s.startsWith('英語')) || '英語（標準）';
+        return [mathSubject, englishSubject];
+    };
+
+    const userLevelSubjects = getUserLevelSubjects();
+
     // Handle Input Change (for text fields)
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -162,15 +172,28 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 ? `${record.selectedItem} ${record.contentDetails}`
                 : record.selectedItem;
 
-            await addDoc(collection(db, 'users', user.uid, 'studyRecords'), {
+            const recordData = {
                 subject: record.subject,
                 content: fullContent,
                 duration: Number(record.duration),
                 comment: record.comment,
-                createdAt: serverTimestamp(),
                 userName: profile.displayName || 'Unknown',
                 userType: profile.type || 'riken'
-            });
+            };
+
+            // If custom date is specified, use it; otherwise use serverTimestamp
+            if (customDate) {
+                // Parse the selected date and set time to noon (12:00) to avoid timezone issues
+                const dateObj = new Date(customDate);
+                dateObj.setHours(12, 0, 0, 0);
+                recordData.createdAt = Timestamp.fromDate(dateObj);
+                recordData.isManualDate = true;
+            } else {
+                recordData.createdAt = serverTimestamp();
+                recordData.isManualDate = false;
+            }
+
+            await addDoc(collection(db, 'users', user.uid, 'studyRecords'), recordData);
 
             alert(t('recordSaved'));
 
@@ -181,6 +204,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 duration: '',
                 comment: ''
             });
+            setCustomDate(''); // Reset custom date
 
             // Trigger stopwatch reset in TimeInput
             setResetTrigger(prev => prev + 1);
@@ -213,19 +237,84 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                     <div className="mb-4">
                         <span className="text-xs font-bold text-gray-400 block mb-2">{t('commonSubjects')}</span>
                         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                            {SUBJECT_GROUPS.common.map(sub => (
+                            {/* 現代文 */}
+                            {SUBJECT_GROUPS.common.includes('現代文') && (
                                 <button
-                                    key={sub}
                                     type="button"
-                                    onClick={() => handleSubjectSelect(sub)}
-                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === sub
+                                    onClick={() => handleSubjectSelect('現代文')}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === '現代文'
                                         ? 'bg-indigo-600 text-white shadow-md transform scale-105'
                                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
-                                    {sub}
+                                    現代文
                                 </button>
-                            ))}
+                            )}
+                            {/* 古典 */}
+                            {SUBJECT_GROUPS.common.includes('古典') && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSubjectSelect('古典')}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === '古典'
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    古典
+                                </button>
+                            )}
+                            {/* Math level subject */}
+                            {userLevelSubjects[0] && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSubjectSelect(userLevelSubjects[0])}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === userLevelSubjects[0]
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    {userLevelSubjects[0].replace(/（.*?）/, '')}
+                                </button>
+                            )}
+                            {/* English level subject */}
+                            {userLevelSubjects[1] && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSubjectSelect(userLevelSubjects[1])}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === userLevelSubjects[1]
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    {userLevelSubjects[1].replace(/（.*?）/, '')}
+                                </button>
+                            )}
+                            {/* 地理 */}
+                            {SUBJECT_GROUPS.common.includes('地理') && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSubjectSelect('地理')}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === '地理'
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    地理
+                                </button>
+                            )}
+                            {/* 情報 */}
+                            {SUBJECT_GROUPS.common.includes('情報') && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSubjectSelect('情報')}
+                                    className={`py-2 px-1 rounded-lg text-sm font-medium transition ${record.subject === '情報'
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    情報
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -286,7 +375,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                             {/* Reference Books */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-bold text-gray-400">{t('referenceBookLabel')}（{record.subject}）</span>
+                                    <span className="text-xs font-bold text-gray-400">{t('referenceBookLabel')}（{record.subject.replace(/（.*?）/, '')}）</span>
                                     <button
                                         type="button"
                                         onClick={() => setIsAddBookModalOpen(true)}
@@ -357,6 +446,27 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                         rows="3"
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
+                </div>
+
+                {/* Custom Date Selection */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        記録日を変更（オプション）
+                    </label>
+                    <input
+                        type="date"
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                        max={(() => {
+                            const yesterday = new Date();
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            return yesterday.toISOString().split('T')[0];
+                        })()}
+                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                        何も選択しない場合は、現在の日時で記録されます。過去の日付を選択すると、タイムラインには日付のみが表示されます。
+                    </p>
                 </div>
 
                 {/* Submit */}

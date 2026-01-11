@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Users, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { SUBJECT_GROUPS, getDefaultSubjects } from '../utils/constants';
+import { SUBJECT_GROUPS, LEVEL_SUBJECTS, getDefaultSubjects } from '../utils/constants';
 
 const ProfileSetup = () => {
   const { profile, updateProfile } = useAuth();
@@ -43,6 +43,18 @@ const ProfileSetup = () => {
     setSubjects(newSubjects);
   };
 
+  const handleMathLevelChange = (level) => {
+    const newSubjects = subjects.filter(s => !s.startsWith('数学'));
+    newSubjects.push(level);
+    setSubjects(newSubjects);
+  };
+
+  const handleEnglishLevelChange = (level) => {
+    const newSubjects = subjects.filter(s => !s.startsWith('英語'));
+    newSubjects.push(level);
+    setSubjects(newSubjects);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const success = await updateProfile({
@@ -51,7 +63,7 @@ const ProfileSetup = () => {
       subjects
     });
     setSaving(false);
-    
+
     if (!success) {
       alert('設定の保存に失敗しました。もう一度お試しください。');
     }
@@ -76,21 +88,19 @@ const ProfileSetup = () => {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setRole('student')}
-              className={`py-3 rounded-lg font-medium transition ${
-                role === 'student'
+              className={`py-3 rounded-lg font-medium transition ${role === 'student'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               生徒
             </button>
             <button
               onClick={() => setRole('teacher')}
-              className={`py-3 rounded-lg font-medium transition ${
-                role === 'teacher'
+              className={`py-3 rounded-lg font-medium transition ${role === 'teacher'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               教員
             </button>
@@ -109,24 +119,68 @@ const ProfileSetup = () => {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => handleTypeChange('bunken')}
-                  className={`py-3 rounded-lg font-medium transition ${
-                    type === 'bunken'
+                  className={`py-3 rounded-lg font-medium transition ${type === 'bunken'
                       ? 'bg-indigo-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   文系
                 </button>
                 <button
                   onClick={() => handleTypeChange('riken')}
-                  className={`py-3 rounded-lg font-medium transition ${
-                    type === 'riken'
+                  className={`py-3 rounded-lg font-medium transition ${type === 'riken'
                       ? 'bg-indigo-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   理系
                 </button>
+              </div>
+            </div>
+
+            {/* Math and English Level Selection */}
+            <div className="mb-6">
+              <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                数学・英語のレベル選択
+              </h3>
+
+              {/* Math Level */}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">数学</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {LEVEL_SUBJECTS.math.map(level => (
+                    <button
+                      key={level}
+                      onClick={() => handleMathLevelChange(level)}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(level)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* English Level */}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">英語</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {LEVEL_SUBJECTS.english.map(level => (
+                    <button
+                      key={level}
+                      onClick={() => handleEnglishLevelChange(level)}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(level)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -159,11 +213,10 @@ const ProfileSetup = () => {
                       <button
                         key={subject}
                         onClick={() => toggleSubject(subject)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${
-                          subjects.includes(subject)
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(subject)
                             ? 'bg-indigo-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {subject}
                       </button>
@@ -179,11 +232,10 @@ const ProfileSetup = () => {
                       <button
                         key={subject}
                         onClick={() => handleHistoryChoice(subject)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${
-                          subjects.includes(subject)
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(subject)
                             ? 'bg-indigo-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {subject}
                       </button>
@@ -205,11 +257,10 @@ const ProfileSetup = () => {
                       <button
                         key={subject}
                         onClick={() => toggleSubject(subject)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${
-                          subjects.includes(subject)
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(subject)
                             ? 'bg-indigo-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {subject}
                       </button>
@@ -225,11 +276,10 @@ const ProfileSetup = () => {
                       <button
                         key={subject}
                         onClick={() => handleScienceChoice(subject)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${
-                          subjects.includes(subject)
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition ${subjects.includes(subject)
                             ? 'bg-indigo-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {subject}
                       </button>
@@ -245,7 +295,7 @@ const ProfileSetup = () => {
         <div className="mt-6 pt-6 border-t">
           <div className="bg-indigo-50 rounded-lg p-4 mb-4">
             <p className="text-sm text-indigo-800">
-              <strong>設定内容:</strong> {role === 'teacher' ? '教員' : '生徒'} / 
+              <strong>設定内容:</strong> {role === 'teacher' ? '教員' : '生徒'} /
               {role === 'student' && ` ${type === 'bunken' ? '文系' : '理系'} / ${subjects.length}科目選択`}
             </p>
           </div>

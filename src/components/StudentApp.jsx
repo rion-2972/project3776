@@ -11,18 +11,27 @@ import SettingsView from './student/SettingsView';
 import LanguageSettings from './student/LanguageSettings';
 import ReferenceBooksList from './student/ReferenceBooksList';
 import PastAssignmentsList from './student/PastAssignmentsList';
+import ClassSelectionSettings from './student/ClassSelectionSettings';
 
 const StudentApp = () => {
   const { profile } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('home'); // record | home | timeline
-  const [activeView, setActiveView] = useState(null); // statistics | settings | language | books | pastAssignments
+  const [activeView, setActiveView] = useState(null); // statistics | settings | language | books | pastAssignments | classSelection
   const [preFillData, setPreFillData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleAssignmentClick = (assignment) => {
+    let subjectToRecord = assignment.subject;
+
+    // If assignment is '英論', map it to user's English level
+    if (assignment.subject === '英論') {
+      const userEnglish = profile?.subjects?.find(s => s.startsWith('英語'));
+      subjectToRecord = userEnglish || '英語（標準）';
+    }
+
     setPreFillData({
-      subject: assignment.subject,
+      subject: subjectToRecord,
       task: '課題', // Fixed task type
       contentDetails: assignment.content,
       mode: 'stopwatch'
@@ -69,6 +78,9 @@ const StudentApp = () => {
     }
     if (activeView === 'pastAssignments') {
       return <PastAssignmentsList onBack={handleBackToSettings} />;
+    }
+    if (activeView === 'classSelection') {
+      return <ClassSelectionSettings onBack={handleBackToSettings} />;
     }
 
     // Tab views
