@@ -26,30 +26,30 @@ const TeacherApp = () => {
             メニュー
           </div>
           <button
-            onClick={() => setActiveTab('analytics')}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'analytics'
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'text-gray-700 hover:bg-gray-50'
-              }`}
-          >
-            <BarChart3 className="w-5 h-5" />
-            <span className="text-sm font-medium">分析</span>
-          </button>
-          <button
             onClick={() => setActiveTab('home')}
             className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'home'
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'text-gray-700 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-700 hover:bg-gray-50'
               }`}
           >
             <Home className="w-5 h-5" />
             <span className="text-sm font-medium">ホーム</span>
           </button>
           <button
+            onClick={() => setActiveTab('analytics')}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'analytics'
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-700 hover:bg-gray-50'
+              }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="text-sm font-medium">分析</span>
+          </button>
+          <button
             onClick={() => setActiveTab('timeline')}
             className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'timeline'
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'text-gray-700 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-600'
+              : 'text-gray-700 hover:bg-gray-50'
               }`}
           >
             <Clock className="w-5 h-5" />

@@ -54,30 +54,30 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                                     メインメニュー
                                 </div>
                                 <button
-                                    onClick={() => handleTabClick('record')}
-                                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'record' && !activeView
-                                            ? 'bg-indigo-50 text-indigo-600'
-                                            : 'text-gray-700 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <PenTool className="w-5 h-5" />
-                                    <span className="text-sm font-medium">{t('navRecord')}</span>
-                                </button>
-                                <button
                                     onClick={() => handleTabClick('home')}
                                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'home' && !activeView
-                                            ? 'bg-indigo-50 text-indigo-600'
-                                            : 'text-gray-700 hover:bg-gray-50'
+                                        ? 'bg-indigo-50 text-indigo-600'
+                                        : 'text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     <Home className="w-5 h-5" />
                                     <span className="text-sm font-medium">{t('navHome')}</span>
                                 </button>
                                 <button
+                                    onClick={() => handleTabClick('record')}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'record' && !activeView
+                                        ? 'bg-indigo-50 text-indigo-600'
+                                        : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    <PenTool className="w-5 h-5" />
+                                    <span className="text-sm font-medium">{t('navRecord')}</span>
+                                </button>
+                                <button
                                     onClick={() => handleTabClick('timeline')}
                                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition ${activeTab === 'timeline' && !activeView
-                                            ? 'bg-indigo-50 text-indigo-600'
-                                            : 'text-gray-700 hover:bg-gray-50'
+                                        ? 'bg-indigo-50 text-indigo-600'
+                                        : 'text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     <Clock className="w-5 h-5" />
@@ -92,8 +92,8 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                             <button
                                 onClick={() => handleNavigation('statistics')}
                                 className={`w-full flex items-center gap-3 p-4 rounded-xl transition ${activeView === 'statistics'
-                                        ? 'bg-gradient-to-r from-indigo-50 to-purple-50'
-                                        : 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100'
+                                    ? 'bg-gradient-to-r from-indigo-50 to-purple-50'
+                                    : 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100'
                                     } group`}
                             >
                                 <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
@@ -105,8 +105,8 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                             <button
                                 onClick={() => handleNavigation('settings')}
                                 className={`w-full flex items-center gap-3 p-4 rounded-xl transition ${activeView === 'settings'
-                                        ? 'bg-gradient-to-r from-gray-50 to-slate-50'
-                                        : 'bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100'
+                                    ? 'bg-gradient-to-r from-gray-50 to-slate-50'
+                                    : 'bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100'
                                     } group`}
                             >
                                 <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
