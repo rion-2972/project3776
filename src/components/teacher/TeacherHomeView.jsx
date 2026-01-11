@@ -386,7 +386,8 @@ const TeacherHomeView = () => {
 
             const subjectHours = {};
             records.forEach(r => {
-                const subject = r.subject || 'その他';
+                const rawSubject = r.subject || 'その他';
+                const subject = rawSubject.replace(/（.*?）/, ''); // Normalize by removing level suffix
                 subjectHours[subject] = (subjectHours[subject] || 0) + (r.duration || 0);
             });
             const topSubjects = Object.entries(subjectHours)

@@ -31,9 +31,19 @@ const TimelineView = () => {
         return () => unsubscribe();
     }, []);
 
-    const formatTime = (timestamp) => {
+    const formatTime = (timestamp, isManualDate) => {
         if (!timestamp) return '';
         const date = timestamp.toDate();
+
+        // If manually dated, show only date
+        if (isManualDate) {
+            return date.toLocaleString('ja-JP', {
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Otherwise show date and time
         return date.toLocaleString('ja-JP', {
             month: 'short',
             day: 'numeric',
@@ -49,7 +59,7 @@ const TimelineView = () => {
         } else {
             const hours = Math.floor(minutes / 60);
             const remainingMinutes = minutes % 60;
-            return remainingMinutes > 0 
+            return remainingMinutes > 0
                 ? `${hours}時間${remainingMinutes}分`
                 : `${hours}時間`;
         }
@@ -83,14 +93,14 @@ const TimelineView = () => {
                             </div>
                             <div className="flex items-center gap-1 text-xs text-gray-400">
                                 <Clock className="w-3 h-3" />
-                                {formatTime(record.createdAt)}
+                                {formatTime(record.createdAt, record.isManualDate)}
                             </div>
                         </div>
 
                         <div className="pl-10">
                             <div className="flex flex-wrap gap-3 mb-2">
                                 <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-sm font-bold rounded">
-                                    {record.subject}
+                                    {record.subject.replace(/（.*?）/, '')}
                                 </span>
                                 <span className="px-3 py-1.5 bg-gray-200 text-gray-800 text-sm font-bold rounded">
                                     {formatDuration(record.duration)}

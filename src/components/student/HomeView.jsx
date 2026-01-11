@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit } from 'lucide-react';
+import { SUBJECT_ORDER } from '../../utils/constants';
 
 // --- Sub-component: Daily Study Hours ---
 const DailyStudyHours = ({ uid }) => {
@@ -200,8 +201,8 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             const past = [];
 
             data.forEach(a => {
-                // Filter by subject
-                if (!userSubjects.includes(a.subject)) return;
+                // Filter by subject - '英論' is visible to all students
+                if (!userSubjects.includes(a.subject) && a.subject !== '英論') return;
 
                 if (a.dueDate) {
                     const dueDate = new Date(a.dueDate);
@@ -272,7 +273,10 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
 
     const handleAdd = async (e) => {
         e.preventDefault();
-        if (!newAssign.subject || !newAssign.content) return;
+        if (!newAssign.subject || !newAssign.content || !newAssign.dueDate) {
+            alert('この項目を入力してください。');
+            return;
+        }
         await addDoc(collection(db, 'assignments'), {
             ...newAssign,
             createdBy: user.uid,
@@ -326,7 +330,22 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         required
                     >
                         <option value="">{t('selectSubject')}</option>
-                        {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
+                        {(() => {
+                            // Helper function to get sort index
+                            const getSubjectOrderIndex = (subject) => {
+                                const normalized = subject.replace(/（.*?）/, '');
+                                const index = SUBJECT_ORDER.indexOf(normalized);
+                                return index !== -1 ? index : 999;
+                            };
+
+                            // Combine user subjects with 英論 and sort
+                            const allSubjects = [...(profile?.subjects || []), '英論'];
+                            const sortedSubjects = allSubjects.sort((a, b) =>
+                                getSubjectOrderIndex(a) - getSubjectOrderIndex(b)
+                            );
+
+                            return sortedSubjects.map(s => <option key={s} value={s}>{s}</option>);
+                        })()}
                     </select>
                     <input
                         className="block w-full mb-2 p-2 rounded border-gray-300 text-sm"
@@ -340,6 +359,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         className="block w-full mb-2 p-2 rounded border-gray-300 text-sm"
                         value={newAssign.dueDate}
                         onChange={e => setNewAssign({ ...newAssign, dueDate: e.target.value })}
+                        required
                     />
                     <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded text-sm font-bold">{t('addAssignment')}</button>
                 </form>
@@ -368,7 +388,18 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                             onChange={e => setEditForm({ ...editForm, subject: e.target.value })}
                                         >
                                             <option value="">{t('selectSubject')}</option>
-                                            {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
+                                            {(() => {
+                                                const getSubjectOrderIndex = (subject) => {
+                                                    const normalized = subject.replace(/（.*?）/, '');
+                                                    const index = SUBJECT_ORDER.indexOf(normalized);
+                                                    return index !== -1 ? index : 999;
+                                                };
+                                                const allSubjects = [...(profile?.subjects || []), '英論'];
+                                                const sortedSubjects = allSubjects.sort((a, b) =>
+                                                    getSubjectOrderIndex(a) - getSubjectOrderIndex(b)
+                                                );
+                                                return sortedSubjects.map(s => <option key={s} value={s}>{s}</option>);
+                                            })()}
                                         </select>
                                         <input
                                             className="block w-full p-2 rounded border-gray-300 text-sm"

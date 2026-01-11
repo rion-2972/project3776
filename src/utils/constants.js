@@ -11,15 +11,46 @@ export const TASKS = [
 export const TARGET_HOURS = 3776;
 
 export const SUBJECT_GROUPS = {
-  common: ['現代文', '古典', '数学', '英語', '地理', '情報'],
+  common: ['現代文', '古典', '地理', '情報'],
   bunken: ['化学基礎', '生物基礎', '政治経済'],
   bunkenHistory: ['日本史', '世界史'],
   riken: ['化学'],
   rikenScience: ['物理', '生物']
 };
 
+// Level-based subjects for Math and English
+export const LEVEL_SUBJECTS = {
+  math: ['数学（標準）', '数学（発展）'],
+  english: ['英語（標準）', '英語（発展）']
+};
+
+// Subjects available for assignment creation (includes 英論)
+export const ASSIGNMENT_SUBJECTS = [
+  ...SUBJECT_GROUPS.common,
+  ...LEVEL_SUBJECTS.math,
+  ...LEVEL_SUBJECTS.english,
+  ...SUBJECT_GROUPS.bunken,
+  ...SUBJECT_GROUPS.bunkenHistory,
+  ...SUBJECT_GROUPS.riken,
+  ...SUBJECT_GROUPS.rikenScience,
+  '英論'  // English Essay - assignment-only subject
+];
+
+// Subject display order for assignment dropdowns
+export const SUBJECT_ORDER = [
+  '現代文', '古典', '数学', '英語', '英論',
+  '日本史', '世界史',
+  '化学基礎', '生物基礎', '政治経済',
+  '化学', '物理', '生物',
+  '地理', '情報'
+];
+
 export const getDefaultSubjects = (type, historyChoice = '日本史', scienceChoice = '物理') => {
-  const subjects = [...SUBJECT_GROUPS.common];
+  const subjects = [
+    ...SUBJECT_GROUPS.common,
+    '数学（標準）',  // Default math level
+    '英語（標準）'   // Default english level
+  ];
 
   if (type === 'bunken') {
     subjects.push(...SUBJECT_GROUPS.bunken);
@@ -31,3 +62,5 @@ export const getDefaultSubjects = (type, historyChoice = '日本史', scienceCho
 
   return subjects;
 };
+
+
