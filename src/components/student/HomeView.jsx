@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, s
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit } from 'lucide-react';
+import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit, AlertTriangle, History } from 'lucide-react';
 import { SUBJECT_ORDER } from '../../utils/constants';
 
 // --- Sub-component: Daily Study Hours ---
@@ -186,7 +186,30 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const [newAssign, setNewAssign] = useState({ subject: '', content: '', dueDate: '' });
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({ subject: '', content: '', dueDate: '' });
+
+    // Helper: Get tomorrow's date in YYYY-MM-DD format (local time)
+    const getMinDate = () => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const yyyy = tomorrow.getFullYear();
+        const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const dd = String(tomorrow.getDate()).padStart(2, '0');
+
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const minDate = getMinDate();
+
+    // Helper: Check if a date string (YYYY-MM-DD) is tomorrow
+    const isDueTomorrow = (dueDateString) => {
+        if (!dueDateString) return false;
+        return dueDateString === minDate;
+    };
+
     const [showPastAssignments, setShowPastAssignments] = useState(false);
+    const [burningId, setBurningId] = useState(null);
+
 
     // Fetch Assignments (Global) - In real app, filter by subject match?
     useEffect(() => {
@@ -263,6 +286,45 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
             updatedAt: serverTimestamp()
         });
     };
+
+    // Handle toggle with burning animation
+    const handleToggleComplete = async (assignmentId, currentStatus) => {
+        // Only animate when completing a task (not when uncompleting)
+        if (!currentStatus) {
+            setBurningId(assignmentId);
+
+            // Spawn emoji particles
+            const taskElement = document.querySelector(`[data-assignment-id="${assignmentId}"]`);
+            if (taskElement) {
+                const rect = taskElement.getBoundingClientRect();
+                const particleCount = 5;
+
+                for (let i = 0; i < particleCount; i++) {
+                    const emoji = document.createElement('div');
+                    emoji.className = 'fire-emoji';
+                    emoji.textContent = '🔥';
+                    emoji.style.left = `${rect.left + (rect.width * (0.2 + i * 0.15))}px`;
+                    emoji.style.top = `${rect.top + rect.height / 2}px`;
+                    emoji.style.animationDelay = `${i * 0.1}s`;
+                    document.body.appendChild(emoji);
+
+                    // Remove emoji after animation completes
+                    setTimeout(() => emoji.remove(), 1000 + i * 100);
+                }
+            }
+
+            // Wait for animation to complete (increased to 1s)
+            setTimeout(async () => {
+                await toggleComplete(assignmentId, currentStatus);
+                setBurningId(null);
+            }, 1000);
+        } else {
+            // Immediately toggle if uncompleting
+            await toggleComplete(assignmentId, currentStatus);
+        }
+    };
+
+
 
     // Format date for display (YYYY-MM-DD format)
     const formatDate = (dateString) => {
@@ -358,6 +420,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         type="date"
                         className="block w-full mb-2 p-2 rounded border-gray-300 text-sm"
                         value={newAssign.dueDate}
+                        min={minDate}
                         onChange={e => setNewAssign({ ...newAssign, dueDate: e.target.value })}
                         required
                     />
@@ -374,9 +437,20 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         if (aCompleted === bCompleted) return 0;
                         return aCompleted ? 1 : -1;
                     }).map(a => (
-                        <div key={a.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                            <button onClick={() => toggleComplete(a.id, myStatus[a.id]?.completed)}>
-                                {myStatus[a.id]?.completed ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
+                        <div key={a.id} data-assignment-id={a.id} className={`flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm ${burningId === a.id ? 'burning-task' : ''}`}>
+                            <button onClick={() => handleToggleComplete(a.id, myStatus[a.id]?.completed)}>
+                                {myStatus[a.id]?.completed ? (
+                                    <CheckCircle className="w-5 h-5 text-green-500" />
+                                ) : isDueTomorrow(a.dueDate) ? (
+                                    <div className="relative group">
+                                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                                        <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none">
+                                            明日締切
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <Circle className="w-5 h-5 text-gray-300" />
+                                )}
                             </button>
                             <div className="flex-1">
                                 {editingId === a.id ? (
@@ -411,6 +485,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                             type="date"
                                             className="block w-full p-2 rounded border-gray-300 text-sm"
                                             value={editForm.dueDate}
+                                            min={minDate}
                                             onChange={e => setEditForm({ ...editForm, dueDate: e.target.value })}
                                         />
                                         <div className="flex gap-2">
@@ -520,6 +595,170 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     );
 };
 
+// --- Sub-component: Daily Routines ---
+const DailyRoutinesSection = ({ user }) => {
+    const { t } = useLanguage();
+    const [routines, setRoutines] = useState([]);
+    const [newRoutine, setNewRoutine] = useState('');
+    const [showHistory, setShowHistory] = useState(null);
+
+    // Get today's date in YYYY-MM-DD format
+    const getTodayString = () => {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    useEffect(() => {
+        const q = query(collection(db, `users/${user.uid}/dailyRoutines`), orderBy('createdAt', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setRoutines(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+        return () => unsubscribe();
+    }, [user]);
+
+    const handleAdd = async (e) => {
+        e.preventDefault();
+        if (!newRoutine.trim()) return;
+        await addDoc(collection(db, `users/${user.uid}/dailyRoutines`), {
+            content: newRoutine,
+            completedDates: [],
+            createdAt: serverTimestamp()
+        });
+        setNewRoutine('');
+    };
+
+    const toggleComplete = async (routine) => {
+        const today = getTodayString();
+        const completedDates = routine.completedDates || [];
+        const isCompleted = completedDates.includes(today);
+
+        let newCompletedDates;
+        if (isCompleted) {
+            // Remove today from the list
+            newCompletedDates = completedDates.filter(date => date !== today);
+        } else {
+            // Add today to the list
+            newCompletedDates = [...completedDates, today];
+        }
+
+        await setDoc(doc(db, `users/${user.uid}/dailyRoutines`, routine.id), {
+            ...routine,
+            completedDates: newCompletedDates
+        });
+    };
+
+    const handleDelete = async (id) => {
+        if (window.confirm(t('deleteDailyRoutineConfirm'))) {
+            await deleteDoc(doc(db, `users/${user.uid}/dailyRoutines`, id));
+        }
+    };
+
+    const isCompletedToday = (routine) => {
+        const today = getTodayString();
+        return (routine.completedDates || []).includes(today);
+    };
+
+    // Format history dates for display
+    const formatHistoryDates = (dates) => {
+        if (!dates || dates.length === 0) return [];
+        // Sort dates in descending order (most recent first)
+        return [...dates].sort((a, b) => b.localeCompare(a));
+    };
+
+    return (
+        <div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">{t('dailyRoutines')}</h2>
+
+            {/* Add Routine Form */}
+            <form onSubmit={handleAdd} className="bg-white p-3 rounded-lg border border-gray-200 mb-4 text-sm">
+                <input
+                    className="w-full p-2 border rounded mb-2"
+                    placeholder={t('dailyRoutineContent')}
+                    value={newRoutine}
+                    onChange={e => setNewRoutine(e.target.value)}
+                    required
+                />
+                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded font-medium text-xs">
+                    {t('addDailyRoutine')}
+                </button>
+            </form>
+
+            {/* Routines List */}
+            <div className="space-y-2">
+                {routines.length === 0 ? (
+                    <p className="text-sm text-gray-400">{t('noDailyRoutines')}</p>
+                ) : (
+                    routines.map(routine => {
+                        const completedToday = isCompletedToday(routine);
+                        const historyDates = formatHistoryDates(routine.completedDates);
+
+                        return (
+                            <div key={routine.id}>
+                                <div className="bg-white p-3 rounded-lg border-l-4 border-l-green-500 shadow-sm flex items-center justify-between">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <button onClick={() => toggleComplete(routine)}>
+                                            {completedToday ? (
+                                                <CheckCircle className="w-5 h-5 text-green-500" />
+                                            ) : (
+                                                <Circle className="w-5 h-5 text-gray-300" />
+                                            )}
+                                        </button>
+                                        <div className="flex-1">
+                                            <div className={`text-sm font-medium ${completedToday ? 'text-gray-400 line-through' : 'text-gray-800'
+                                                }`}>
+                                                {routine.content}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => setShowHistory(showHistory === routine.id ? null : routine.id)}
+                                            className="p-2 text-gray-400 hover:text-indigo-600 transition"
+                                            title={t('viewHistory')}
+                                        >
+                                            <History className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(routine.id)}
+                                            className="p-2 text-gray-400 hover:text-red-500 transition"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* History Display */}
+                                {showHistory === routine.id && (
+                                    <div className="mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                        <h4 className="text-xs font-bold text-gray-700 mb-2">{t('completionHistory')}</h4>
+                                        {historyDates.length === 0 ? (
+                                            <p className="text-xs text-gray-400">まだ実施履歴がありません</p>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-1">
+                                                {historyDates.map(date => (
+                                                    <span
+                                                        key={date}
+                                                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
+                                                    >
+                                                        {date}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- Sub-component: My Plans ---
 const MyPlansSection = ({ user, profile }) => {
     const { t } = useLanguage();
@@ -625,9 +864,24 @@ const HomeView = ({ onAssignmentClick }) => {
     return (
         <div className="pb-20 md:pb-0">
             <DailyStudyHours uid={user.uid} />
-            <div className="md:grid md:grid-cols-2 md:gap-6">
-                <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
-                <MyPlansSection user={user} profile={profile} />
+
+            {/* Mobile: 課題 → 日課 → マイプラン (縦並び) */}
+            {/* PC: 左列(課題、マイプラン) / 右列(日課) */}
+            <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
+                {/* 課題: Mobile(1番目), PC(左上) */}
+                <div className="order-1 md:order-1">
+                    <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
+                </div>
+
+                {/* 日課: Mobile(2番目), PC(右上 - row-span-2で2行分) */}
+                <div className="order-2 md:order-2 md:row-span-2">
+                    <DailyRoutinesSection user={user} />
+                </div>
+
+                {/* マイプラン: Mobile(3番目), PC(左下) */}
+                <div className="order-3 md:order-3">
+                    <MyPlansSection user={user} profile={profile} />
+                </div>
             </div>
         </div>
     );

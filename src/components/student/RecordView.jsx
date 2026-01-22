@@ -460,7 +460,11 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                         max={(() => {
                             const yesterday = new Date();
                             yesterday.setDate(yesterday.getDate() - 1);
-                            return yesterday.toISOString().split('T')[0];
+                            // ローカル時間を使用してタイムゾーン問題を回避
+                            const yyyy = yesterday.getFullYear();
+                            const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+                            const dd = String(yesterday.getDate()).padStart(2, '0');
+                            return `${yyyy}-${mm}-${dd}`;
                         })()}
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
