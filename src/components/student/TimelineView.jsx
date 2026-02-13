@@ -1,15 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collectionGroup, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Clock, User } from 'lucide-react';
+import MtFujiProgress from '../shared/MtFujiProgress';
 
 const TimelineView = () => {
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [monthlyTotalHours, setMonthlyTotalHours] = useState(0);
+    const [currentMonth] = useState(new Date());
 
+    // 今月のクラス全体の総学習時間を取得
     useEffect(() => {
-        // collectionGroup queries all collections with the same name 'studyRecords' 
-        // regardless of where they are in the hierarchy (i.e. under any user)
+        const now = currentMonth;
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const q = query(
+            collectionGroup(db, 'studyRecords'),
+            where('createdAt', '>=', start),
+            where('createdAt', '<=', end)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const totalMinutes = snapshot.docs.reduce((sum, doc) => {
+                return sum + (doc.data().duration || 0);
+            }, 0);
+            setMonthlyTotalHours(Math.round(totalMinutes / 60));
+        }, (error) => {
+            console.error('クラス全体の学習時間取得エラー:', error);
+        });
+
+        return () => unsubscribe();
+    }, [currentMonth]);
+
+    // タイムラインの学習記録を取得
+    useEffect(() => {
         const q = query(
             collectionGroup(db, 'studyRecords'),
             orderBy('createdAt', 'desc'),
@@ -35,7 +61,7 @@ const TimelineView = () => {
         if (!timestamp) return '';
         const date = timestamp.toDate();
 
-        // If manually dated, show only date
+        // 手動入力の日付の場合、日付のみ表示
         if (isManualDate) {
             return date.toLocaleString('ja-JP', {
                 month: 'short',
@@ -43,7 +69,7 @@ const TimelineView = () => {
             });
         }
 
-        // Otherwise show date and time
+        // それ以外は日付と時刻を表示
         return date.toLocaleString('ja-JP', {
             month: 'short',
             day: 'numeric',
@@ -71,6 +97,13 @@ const TimelineView = () => {
 
     return (
         <div className="space-y-4">
+            {/* 富士山進捗表示 - クラス全体の今月の総学習時間 */}
+            <MtFujiProgress
+                currentHours={monthlyTotalHours}
+                targetHours={3776}
+                currentMonth={currentMonth}
+            />
+
             <h2 className="text-xl font-bold text-gray-900 mb-4 px-2">みんなの学習記録</h2>
 
             {records.length === 0 ? (

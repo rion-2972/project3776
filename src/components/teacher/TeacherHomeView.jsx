@@ -306,6 +306,7 @@ const TeacherHomeView = () => {
     const [pastAssignments, setPastAssignments] = useState([]);
     const [pastAssignmentProgress, setPastAssignmentProgress] = useState({});
     const [expandedPastAssignments, setExpandedPastAssignments] = useState(new Set());
+    const [allStatusMap, setAllStatusMap] = useState({}); // { assignmentId: { studentId: statusData } }
 
 
 
@@ -428,93 +429,85 @@ const TeacherHomeView = () => {
         return completedAt <= deadline;
     }, []);
 
-    // ==== fetch assignment progress ====
-    const fetchAssignmentProgress = useCallback(async (assignmentsList) => {
-        try {
-            const progress = {};
-            for (const assignment of assignmentsList) {
-                const eligibleStudents = students.filter(s =>
-                    s.subjects && s.subjects.includes(assignment.subject)
-                );
-                const eligibleCount = eligibleStudents.length;
-
-                const completedStudentsList = [];
-                for (const student of eligibleStudents) {
-                    const statusDoc = await getDocs(
-                        query(
-                            collection(db, `users/${student.id}/assignmentStatus`),
-                            where('assignmentId', '==', assignment.id),
-                            where('completed', '==', true)
-                        )
-                    );
-                    if (!statusDoc.empty) {
-                        completedStudentsList.push(student);
-                    }
+    // ==== collectionGroup で全生徒の課題進捗を一括リアルタイム監視 ====
+    useEffect(() => {
+        const q = query(collectionGroup(db, 'assignmentStatus'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const newMap = {};
+            snapshot.docs.forEach(docSnap => {
+                const data = docSnap.data();
+                const studentId = docSnap.ref.parent.parent.id;
+                const assignmentId = data.assignmentId;
+                if (!assignmentId) return;
+                if (!newMap[assignmentId]) {
+                    newMap[assignmentId] = {};
                 }
+                newMap[assignmentId][studentId] = data;
+            });
+            setAllStatusMap(newMap);
+        }, (error) => {
+            console.error('Error fetching assignment statuses:', error);
+        });
+        return () => unsubscribe();
+    }, []);
 
-                // Identify non-completed students
-                const completedIds = new Set(completedStudentsList.map(s => s.id));
-                const notCompletedStudentsList = eligibleStudents.filter(s => !completedIds.has(s.id));
-
-                progress[assignment.id] = {
-                    completed: completedStudentsList.length,
-                    total: eligibleCount,
-                    completedStudents: completedStudentsList,
-                    notCompletedStudents: notCompletedStudentsList
-                };
-            }
-            setAssignmentProgress(progress);
-        } catch (error) {
-            console.error('Error fetching assignment progress:', error);
-        }
-    }, [students]);
-
-    // ==== fetch past assignment progress (with deadline check) ====
-    const fetchPastAssignmentProgress = useCallback(async (assignmentsList) => {
-        try {
-            const progress = {};
-            for (const assignment of assignmentsList) {
-                const eligibleStudents = students.filter(s =>
-                    s.subjects && s.subjects.includes(assignment.subject)
-                );
-                const eligibleCount = eligibleStudents.length;
-
-                const completedStudentsList = [];
-                const notCompletedStudentsList = [];
-
-                for (const student of eligibleStudents) {
-                    const statusDoc = await getDocs(
-                        query(
-                            collection(db, `users/${student.id}/assignmentStatus`),
-                            where('assignmentId', '==', assignment.id)
-                        )
-                    );
-
-                    if (!statusDoc.empty) {
-                        const statusData = statusDoc.docs[0].data();
-                        // Check if completed within deadline
-                        if (isCompletedWithinDeadline(assignment, statusData)) {
-                            completedStudentsList.push(student);
-                        } else {
-                            notCompletedStudentsList.push(student);
-                        }
-                    } else {
-                        notCompletedStudentsList.push(student);
-                    }
+    // ==== 現在の課題進捗をメモリ上で計算 ====
+    useEffect(() => {
+        if (students.length === 0 || assignments.length === 0) return;
+        const progress = {};
+        assignments.forEach(assignment => {
+            const eligibleStudents = students.filter(s =>
+                s.subjects && (s.subjects.includes(assignment.subject) || assignment.subject === '英論')
+            );
+            const assignmentStatuses = allStatusMap[assignment.id] || {};
+            const completedStudentsList = [];
+            const notCompletedStudentsList = [];
+            eligibleStudents.forEach(student => {
+                const status = assignmentStatuses[student.id];
+                if (status?.completed === true) {
+                    completedStudentsList.push(student);
+                } else {
+                    notCompletedStudentsList.push(student);
                 }
+            });
+            progress[assignment.id] = {
+                completed: completedStudentsList.length,
+                total: eligibleStudents.length,
+                completedStudents: completedStudentsList,
+                notCompletedStudents: notCompletedStudentsList
+            };
+        });
+        setAssignmentProgress(progress);
+    }, [assignments, students, allStatusMap]);
 
-                progress[assignment.id] = {
-                    completed: completedStudentsList.length,
-                    total: eligibleCount,
-                    completedStudents: completedStudentsList,
-                    notCompletedStudents: notCompletedStudentsList
-                };
-            }
-            setPastAssignmentProgress(progress);
-        } catch (error) {
-            console.error('Error fetching past assignment progress:', error);
-        }
-    }, [students, isCompletedWithinDeadline]);
+    // ==== 過去の課題進捗をメモリ上で計算（期限チェック付き） ====
+    useEffect(() => {
+        if (students.length === 0 || pastAssignments.length === 0) return;
+        const progress = {};
+        pastAssignments.forEach(assignment => {
+            const eligibleStudents = students.filter(s =>
+                s.subjects && (s.subjects.includes(assignment.subject) || assignment.subject === '英論')
+            );
+            const assignmentStatuses = allStatusMap[assignment.id] || {};
+            const completedStudentsList = [];
+            const notCompletedStudentsList = [];
+            eligibleStudents.forEach(student => {
+                const status = assignmentStatuses[student.id];
+                if (status && isCompletedWithinDeadline(assignment, status)) {
+                    completedStudentsList.push(student);
+                } else {
+                    notCompletedStudentsList.push(student);
+                }
+            });
+            progress[assignment.id] = {
+                completed: completedStudentsList.length,
+                total: eligibleStudents.length,
+                completedStudents: completedStudentsList,
+                notCompletedStudents: notCompletedStudentsList
+            };
+        });
+        setPastAssignmentProgress(progress);
+    }, [pastAssignments, students, allStatusMap, isCompletedWithinDeadline]);
 
     // ==== fetch assignments ====
     const fetchAssignments = useCallback(() => {
@@ -529,10 +522,9 @@ const TeacherHomeView = () => {
                     return dueDate >= now;
                 });
             setAssignments(data);
-            fetchAssignmentProgress(data);
         });
         return unsubscribe;
-    }, [fetchAssignmentProgress]);
+    }, []);
 
     // ==== fetch past assignments ====
     const fetchPastAssignments = useCallback(() => {
@@ -547,10 +539,9 @@ const TeacherHomeView = () => {
                     return dueDate < now; // All past assignments
                 });
             setPastAssignments(data);
-            fetchPastAssignmentProgress(data);
         });
         return unsubscribe;
-    }, [fetchPastAssignmentProgress]);
+    }, []);
 
     // ==== useEffect ====
 
@@ -558,11 +549,11 @@ const TeacherHomeView = () => {
         fetchStudents();
         fetchDailyActive();
         fetchWeeklyStats();
-        const unsubscribe = fetchAssignments();
-        const unsubscribePast = fetchPastAssignments();
+        const unsubscribeAssignments = fetchAssignments();
+        const unsubscribePastAssignments = fetchPastAssignments();
         return () => {
-            unsubscribe && unsubscribe();
-            unsubscribePast && unsubscribePast();
+            unsubscribeAssignments && unsubscribeAssignments();
+            unsubscribePastAssignments && unsubscribePastAssignments();
         };
     }, [fetchStudents, fetchDailyActive, fetchWeeklyStats, fetchAssignments, fetchPastAssignments]);
 
