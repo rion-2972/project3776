@@ -1,15 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { collection, query, getDocs, collectionGroup, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filter } from 'lucide-react';
+import MtFujiProgress from '../shared/MtFujiProgress';
 
-// Native JS date utilities
-const formatMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    return `${year}年${month}月`;
-};
-
+// 日付ユーティリティ関数
 const addMonths = (date, months) => {
     const newDate = new Date(date);
     newDate.setMonth(newDate.getMonth() + months);
@@ -26,81 +21,6 @@ const endOfMonth = (date) => {
 
 const isSameMonth = (date1, date2) => {
     return date1.getFullYear() === date2.getFullYear() && date1.getMonth() === date2.getMonth();
-};
-
-// Mt. Fuji SVG Component
-const MtFujiProgress = ({ currentHours, targetHours = 3776, currentMonth, onPrevMonth, onNextMonth, canGoPrev, canGoNext }) => {
-    const percentage = Math.min((currentHours / targetHours) * 100, 100);
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-            <div className="flex items-center justify-center gap-4 mb-4">
-                <button
-                    onClick={onPrevMonth}
-                    disabled={!canGoPrev}
-                    className={`p-1 rounded-full hover:bg-gray-100 transition ${!canGoPrev ? 'opacity-30 cursor-not-allowed' : 'text-gray-600'}`}
-                >
-                    <ChevronLeft className="w-6 h-6" />
-                </button>
-                <h2 className="text-xl font-bold text-gray-900">
-                    {formatMonth(currentMonth)}の学習進捗
-                </h2>
-                <button
-                    onClick={onNextMonth}
-                    disabled={!canGoNext}
-                    className={`p-1 rounded-full hover:bg-gray-100 transition ${!canGoNext ? 'opacity-30 cursor-not-allowed' : 'text-gray-600'}`}
-                >
-                    <ChevronRight className="w-6 h-6" />
-                </button>
-            </div>
-
-            {/* Mt. Fuji Visualization */}
-            <div className="flex flex-col items-center">
-                <svg width="200" height="150" viewBox="0 0 200 150" className="mb-4">
-                    {/* Mountain outline (Simple Trapezoid) */}
-                    <defs>
-                        <clipPath id="mountainClip">
-                            <path d="M 20 150 L 75 40 L 125 40 L 180 150 Z" />
-                        </clipPath>
-                    </defs>
-
-                    {/* Background mountain (gray) */}
-                    <path
-                        d="M 20 150 L 75 40 L 125 40 L 180 150 Z"
-                        fill="#E5E7EB"
-                        stroke="#9CA3AF"
-                        strokeWidth="2"
-                        strokeLinejoin="round"
-                    />
-
-                    {/* Snow cap (Simple white top) */}
-                    <path
-                        d="M 60 70 L 140 70 L 125 40 L 75 40 Z"
-                        fill="white"
-                        fillOpacity="0.8"
-                    />
-
-                    {/* Progress fill (indigo) - rising from bottom */}
-                    {/* The fill will cover the snow cap if progress is high enough, indicating completion */}
-                    <rect
-                        x="0"
-                        y={150 - (110 * percentage / 100)}
-                        width="200"
-                        height={110 * percentage / 100}
-                        fill="#4F46E5"
-                        clipPath="url(#mountainClip)"
-                        fillOpacity="0.9"
-                    />
-                </svg>
-
-                <div className="text-center">
-                    <div className="text-4xl font-bold text-indigo-600">{currentHours.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">/ {targetHours.toLocaleString()} 時間</div>
-                    <div className="mt-2 text-lg font-semibold text-gray-700">{percentage.toFixed(1)}% 達成</div>
-                </div>
-            </div>
-        </div>
-    );
 };
 
 const AnalyticsView = () => {

@@ -1,10 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc, where, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useEffectContext } from '../../contexts/EffectContext';
 import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit, AlertTriangle, History } from 'lucide-react';
 import { SUBJECT_ORDER } from '../../utils/constants';
+import Lottie from 'lottie-react';
+import popExplosionAnimation from '../../assets/animations/pop_explosion.json';
+
+// --- Sub-component: Explosion Overlay with Memory Management ---
+// --- エフェクトを表示し、終わったら自分を消すコンポーネント ---
+const ExplosionOverlay = React.memo(({ onComplete }) => {
+    return (
+        <div
+            className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center"
+            style={{ backgroundColor: 'transparent' }}
+        >
+            <Lottie
+                animationData={popExplosionAnimation}
+                loop={false}
+                autoplay={true}
+                speed={1.5} // 爆発なので少し速めが爽快です
+                renderer="canvas"
+                onComplete={onComplete} // アニメーション終了時に親のStateをfalseにする
+                style={{ width: '80%', height: '80%' }}
+            />
+        </div>
+    );
+});
 
 // --- Sub-component: Daily Study Hours ---
 const DailyStudyHours = ({ uid }) => {
@@ -179,6 +203,7 @@ const DailyStudyHours = ({ uid }) => {
 // --- Sub-component: Shared Assignments ---
 const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const { t } = useLanguage();
+    const { effect } = useEffectContext();
     const [assignments, setAssignments] = useState([]);
     const [pastAssignments, setPastAssignments] = useState([]);
     const [myStatus, setMyStatus] = useState({});
@@ -209,6 +234,11 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
 
     const [showPastAssignments, setShowPastAssignments] = useState(false);
     const [burningId, setBurningId] = useState(null);
+    const [lottieEffect, setLottieEffect] = useState(null); // { assignmentId, effectType }
+    const isAnimating = useRef(false); // Lock to prevent rapid consecutive animations
+
+    // Memoize animation data to prevent re-parsing
+    const memoizedAnimationData = useMemo(() => popExplosionAnimation, []);
 
 
     // Fetch Assignments (Global) - In real app, filter by subject match?
@@ -287,37 +317,52 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
         });
     };
 
-    // Handle toggle with burning animation
+    // Handle toggle with effect animation
     const handleToggleComplete = async (assignmentId, currentStatus) => {
+        // Prevent rapid consecutive animations
+        if (isAnimating.current) {
+            return; // Ignore click if animation is in progress
+        }
+
         // Only animate when completing a task (not when uncompleting)
         if (!currentStatus) {
+            isAnimating.current = true; // Lock
             setBurningId(assignmentId);
 
-            // Spawn emoji particles
-            const taskElement = document.querySelector(`[data-assignment-id="${assignmentId}"]`);
-            if (taskElement) {
-                const rect = taskElement.getBoundingClientRect();
-                const particleCount = 5;
+            // Apply effect based on user settings
+            if (effect === 'burning') {
+                // Spawn emoji particles
+                const taskElement = document.querySelector(`[data-assignment-id="${assignmentId}"]`);
+                if (taskElement) {
+                    const rect = taskElement.getBoundingClientRect();
+                    const particleCount = 5;
 
-                for (let i = 0; i < particleCount; i++) {
-                    const emoji = document.createElement('div');
-                    emoji.className = 'fire-emoji';
-                    emoji.textContent = '🔥';
-                    emoji.style.left = `${rect.left + (rect.width * (0.2 + i * 0.15))}px`;
-                    emoji.style.top = `${rect.top + rect.height / 2}px`;
-                    emoji.style.animationDelay = `${i * 0.1}s`;
-                    document.body.appendChild(emoji);
+                    for (let i = 0; i < particleCount; i++) {
+                        const emoji = document.createElement('div');
+                        emoji.className = 'fire-emoji';
+                        emoji.textContent = '🔥';
+                        emoji.style.left = `${rect.left + (rect.width * (0.2 + i * 0.15))}px`;
+                        emoji.style.top = `${rect.top + rect.height / 2}px`;
+                        emoji.style.animationDelay = `${i * 0.1}s`;
+                        document.body.appendChild(emoji);
 
-                    // Remove emoji after animation completes
-                    setTimeout(() => emoji.remove(), 1000 + i * 100);
+                        // Remove emoji after animation completes
+                        setTimeout(() => emoji.remove(), 1000 + i * 100);
+                    }
                 }
+            } else if (effect === 'pop_explosion') {
+                // Show Lottie animation (cleanup handled by onComplete)
+                setLottieEffect({ assignmentId, effectType: 'pop_explosion' });
             }
+            // Future effects can be added here with additional else if blocks
 
-            // Wait for animation to complete (increased to 1s)
+            // Wait for animation to complete (increased to 1s for burning, 2s for pop_explosion)
+            const animationDuration = effect === 'pop_explosion' ? 1500 : 1000;
             setTimeout(async () => {
                 await toggleComplete(assignmentId, currentStatus);
                 setBurningId(null);
-            }, 1000);
+                isAnimating.current = false; // Unlock after animation completes
+            }, animationDuration);
         } else {
             // Immediately toggle if uncompleting
             await toggleComplete(assignmentId, currentStatus);
@@ -437,7 +482,7 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                         if (aCompleted === bCompleted) return 0;
                         return aCompleted ? 1 : -1;
                     }).map(a => (
-                        <div key={a.id} data-assignment-id={a.id} className={`flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm ${burningId === a.id ? 'burning-task' : ''}`}>
+                        <div key={a.id} data-assignment-id={a.id} className={`relative flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm ${burningId === a.id && effect === 'burning' ? 'burning-task' : ''}`}>
                             <button onClick={() => handleToggleComplete(a.id, myStatus[a.id]?.completed)}>
                                 {myStatus[a.id]?.completed ? (
                                     <CheckCircle className="w-5 h-5 text-green-500" />
@@ -538,6 +583,14 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
+                            )}
+
+                            {/* Lottie Effect Overlay for this item */}
+                            {lottieEffect && lottieEffect.assignmentId === a.id && lottieEffect.effectType === 'pop_explosion' && (
+                                <ExplosionOverlay
+                                    animationData={memoizedAnimationData}
+                                    onComplete={() => setLottieEffect(null)}
+                                />
                             )}
                         </div>
                     ))

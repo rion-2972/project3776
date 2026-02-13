@@ -2,6 +2,7 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { EffectProvider } from './contexts/EffectContext';
 import Auth from './components/Auth';
 import ProfileSetup from './components/ProfileSetup';
 import StudentApp from './components/StudentApp';
@@ -45,7 +46,9 @@ function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <AppContent />
+        <EffectProvider>
+          <AppContent />
+        </EffectProvider>
       </LanguageProvider>
     </AuthProvider>
   );

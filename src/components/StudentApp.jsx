@@ -12,12 +12,14 @@ import LanguageSettings from './student/LanguageSettings';
 import ReferenceBooksList from './student/ReferenceBooksList';
 import PastAssignmentsList from './student/PastAssignmentsList';
 import ClassSelectionSettings from './student/ClassSelectionSettings';
+import EffectSettings from './student/EffectSettings';
+import VersionHistoryView from './shared/VersionHistoryView';
 
 const StudentApp = () => {
   const { profile } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('home'); // record | home | timeline
-  const [activeView, setActiveView] = useState(null); // statistics | settings | language | books | pastAssignments | classSelection
+  const [activeView, setActiveView] = useState(null); // statistics | settings | language | books | pastAssignments | classSelection | effect
   const [preFillData, setPreFillData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -81,6 +83,12 @@ const StudentApp = () => {
     }
     if (activeView === 'classSelection') {
       return <ClassSelectionSettings onBack={handleBackToSettings} />;
+    }
+    if (activeView === 'effect') {
+      return <EffectSettings onBack={handleBackToSettings} />;
+    }
+    if (activeView === 'versionHistory') {
+      return <VersionHistoryView onBack={handleBackToSettings} />;
     }
 
     // Tab views
