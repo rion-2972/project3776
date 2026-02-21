@@ -1,34 +1,37 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, setDoc, deleteDoc, where, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useEffectContext } from '../../contexts/EffectContext';
-import { Calendar, CheckCircle, Circle, Plus, Trash2, Edit, AlertTriangle, History } from 'lucide-react';
+import { CheckCircle, Circle, Plus, Trash2, Edit, AlertTriangle, History, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SUBJECT_ORDER } from '../../utils/constants';
-import Lottie from 'lottie-react';
-import popExplosionAnimation from '../../assets/animations/pop_explosion.json';
+import { playTaskCompleteSound, triggerHapticFeedback } from '../../utils/soundUtils';
 
-// --- Sub-component: Explosion Overlay with Memory Management ---
-// --- エフェクトを表示し、終わったら自分を消すコンポーネント ---
-const ExplosionOverlay = React.memo(({ onComplete }) => {
+// 直近7日間のミニ棒グラフ（Sparkline）
+const WeeklySparkline = ({ weekData }) => {
+    const maxVal = Math.max(...weekData.map(d => d.minutes), 1);
+    const days = ['日', '月', '火', '水', '木', '金', '土'];
     return (
-        <div
-            className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center"
-            style={{ backgroundColor: 'transparent' }}
-        >
-            <Lottie
-                animationData={popExplosionAnimation}
-                loop={false}
-                autoplay={true}
-                speed={1.5} // 爆発なので少し速めが爽快です
-                renderer="canvas"
-                onComplete={onComplete} // アニメーション終了時に親のStateをfalseにする
-                style={{ width: '80%', height: '80%' }}
-            />
+        <div className="flex items-end gap-[3px] h-7">
+            {weekData.map((d, i) => {
+                const h = Math.max(2, (d.minutes / maxVal) * 24);
+                const dayOfWeek = days[new Date(d.date).getDay()] || '';
+                return (
+                    <div key={i} className="flex flex-col items-center gap-0.5" title={`${d.label}: ${d.minutes}分`}>
+                        <div
+                            className="w-[5px] rounded-full transition-all duration-300"
+                            style={{
+                                height: `${h}px`,
+                                backgroundColor: d.isToday ? '#6366f1' : (d.minutes > 0 ? '#a5b4fc' : '#e5e7eb'),
+                            }}
+                        />
+                        <span className="text-[7px] text-gray-400 leading-none">{dayOfWeek}</span>
+                    </div>
+                );
+            })}
         </div>
     );
-});
+};
 
 // --- Sub-component: Daily Study Hours ---
 const DailyStudyHours = ({ uid }) => {
@@ -38,25 +41,49 @@ const DailyStudyHours = ({ uid }) => {
     const [showCalendar, setShowCalendar] = useState(false);
     const [currentViewMonth, setCurrentViewMonth] = useState(new Date());
     const [monthlyData, setMonthlyData] = useState({});
+    const [weekData, setWeekData] = useState([]);
 
-    // Fetch today's study hours
+    const DAILY_GOAL = 180; // 目標: 3時間
+
+    // 直近7日間のデータ取得
     useEffect(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
 
         const q = query(
             collection(db, `users/${uid}/studyRecords`),
-            where('createdAt', '>=', today)
+            where('createdAt', '>=', sevenDaysAgo)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const totalMinutes = snapshot.docs.reduce((sum, doc) => {
-                return sum + (doc.data().duration || 0);
-            }, 0);
-            setTodayMinutes(totalMinutes);
-            setLoading(false);
-        }, (error) => {
-            console.error('Error fetching today\'s study hours:', error);
+            const dailyMap = {};
+            snapshot.docs.forEach(d => {
+                const data = d.data();
+                if (!data.createdAt) return;
+                const date = data.createdAt.toDate();
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                dailyMap[key] = (dailyMap[key] || 0) + (data.duration || 0);
+            });
+
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const result = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                result.push({
+                    date: key,
+                    label: `${d.getMonth() + 1}/${d.getDate()}`,
+                    minutes: dailyMap[key] || 0,
+                    isToday: key === todayStr,
+                });
+            }
+            setWeekData(result);
+
+            // 今日の合計を更新
+            setTodayMinutes(dailyMap[todayStr] || 0);
             setLoading(false);
         });
 
@@ -90,12 +117,11 @@ const DailyStudyHours = ({ uid }) => {
         return () => unsubscribe();
     }, [uid, showCalendar, currentViewMonth]);
 
-    const formatTime = (minutes) => {
-        if (minutes < 60) {
-            return `${minutes}${t('minutes')}`;
-        } else {
-            return `${(minutes / 60).toFixed(1)}${t('hours')}`;
-        }
+    const formatTimeShort = (minutes) => {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        if (h === 0) return `${m}m`;
+        return m > 0 ? `${h}h ${m}m` : `${h}h`;
     };
 
     const getDaysInMonth = (date) => {
@@ -107,11 +133,9 @@ const DailyStudyHours = ({ uid }) => {
         const startingDayOfWeek = firstDay.getDay();
 
         const days = [];
-        // Empty cells before first day
         for (let i = 0; i < startingDayOfWeek; i++) {
             days.push(null);
         }
-        // Days of month
         for (let day = 1; day <= daysInMonth; day++) {
             days.push(day);
         }
@@ -126,74 +150,120 @@ const DailyStudyHours = ({ uid }) => {
         setCurrentViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
     };
 
+    // プログレスリング用の計算
+    const progress = Math.min(todayMinutes / DAILY_GOAL, 1);
+    const ringRadius = 40;
+    const ringStroke = 5;
+    const normalizedR = ringRadius - ringStroke / 2;
+    const circumference = 2 * Math.PI * normalizedR;
+    const dashOffset = circumference * (1 - progress);
+    const isGoalReached = todayMinutes >= DAILY_GOAL;
+
     return (
         <>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('todayStudyTime')}</h3>
-                        <div className="text-3xl font-bold text-indigo-600">
-                            {loading ? '...' : formatTime(todayMinutes)}
+            {/* ヘッダーカード：プログレスリング + Sparkline */}
+            <div id="tour-daily-hours" className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 hover:shadow-md transition-shadow duration-300">
+                <div className="flex items-center gap-4">
+                    {/* 左：SVG プログレスリング */}
+                    <div className="relative flex-shrink-0 cursor-pointer" onClick={() => setShowCalendar(!showCalendar)}>
+                        <svg height={ringRadius * 2} width={ringRadius * 2} className="-rotate-90">
+                            <circle stroke="#e5e7eb" fill="transparent" strokeWidth={ringStroke} r={normalizedR} cx={ringRadius} cy={ringRadius} />
+                            <circle
+                                stroke={isGoalReached ? '#10b981' : '#6366f1'}
+                                fill="transparent"
+                                strokeWidth={ringStroke}
+                                strokeDasharray={`${circumference} ${circumference}`}
+                                strokeDashoffset={dashOffset}
+                                strokeLinecap="round"
+                                r={normalizedR}
+                                cx={ringRadius}
+                                cy={ringRadius}
+                                style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.5s ease' }}
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-lg font-black tracking-tight" style={{ color: isGoalReached ? '#10b981' : '#6366f1' }}>
+                                {loading ? '...' : formatTimeShort(todayMinutes)}
+                            </span>
+                            <span className="text-[8px] text-gray-400 font-bold tracking-wider">{t('todayStudyTime')}</span>
                         </div>
                     </div>
-                    <button
-                        onClick={() => setShowCalendar(!showCalendar)}
-                        className="bg-indigo-50 p-3 rounded-full hover:bg-indigo-100 transition"
-                    >
-                        <Calendar className="w-6 h-6 text-indigo-600" />
-                    </button>
+
+                    {/* 右：Sparkline + 目標表示 */}
+                    <div className="flex-1 flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-bold text-gray-400 tracking-wide">LAST 7 DAYS</span>
+                        <WeeklySparkline weekData={weekData} />
+                        <span className="text-[9px] text-gray-400 mt-0.5">
+                            目標 {DAILY_GOAL / 60}h / 日 — {Math.round(progress * 100)}%
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            {/* Calendar Modal/View */}
+            {/* Bottom Sheet カレンダー */}
             {showCalendar && (
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                            </svg>
-                        </button>
-                        <h3 className="font-bold text-gray-900">
-                            {currentViewMonth.getFullYear()}年{currentViewMonth.getMonth() + 1}月
-                        </h3>
-                        <button onClick={goToNextMonth} className="p-2 hover:bg-gray-100 rounded">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                        </button>
-                    </div>
+                <>
+                    {/* Overlay */}
+                    <div
+                        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
+                        onClick={() => setShowCalendar(false)}
+                    />
+                    {/* Sheet */}
+                    <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl p-5 pb-8 bottom-sheet-enter" style={{ maxHeight: '70vh' }}>
+                        {/* ハンドルバー */}
+                        <div className="flex justify-center mb-3">
+                            <div className="w-10 h-1 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <h3 className="font-bold text-gray-900 tracking-wide">
+                                {currentViewMonth.getFullYear()}年{currentViewMonth.getMonth() + 1}月
+                            </h3>
+                            <button onClick={goToNextMonth} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                                <ChevronRight className="w-5 h-5 text-gray-600" />
+                            </button>
+                        </div>
 
-                    <div className="grid grid-cols-7 gap-1">
-                        {['日', '月', '火', '水', '木', '金', '土'].map((day, i) => (
-                            <div key={day} className="text-center text-xs font-bold text-gray-500 p-2">
-                                {day}
-                            </div>
-                        ))}
-                        {getDaysInMonth(currentViewMonth).map((day, index) => (
-                            <div
-                                key={index}
-                                className={`text-center p-2 rounded ${day ? 'hover:bg-gray-50' : ''
-                                    }`}
-                            >
-                                {day && (
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-900">{day}</div>
-                                        {monthlyData[day] ? (
-                                            <div className="text-[10px] font-bold text-indigo-600">
-                                                {monthlyData[day] < 60
-                                                    ? `${monthlyData[day]}分`
-                                                    : `${(monthlyData[day] / 60).toFixed(1)}h`}
-                                            </div>
-                                        ) : (
-                                            <div className="text-[10px] text-gray-300">-</div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                        <div className="grid grid-cols-7 gap-1">
+                            {['日', '月', '火', '水', '木', '金', '土'].map((day) => (
+                                <div key={day} className="text-center text-[10px] font-bold text-gray-400 py-1">
+                                    {day}
+                                </div>
+                            ))}
+                            {getDaysInMonth(currentViewMonth).map((day, index) => (
+                                <div
+                                    key={index}
+                                    className={`text-center py-1.5 rounded-lg ${day ? 'hover:bg-indigo-50' : ''}`}
+                                >
+                                    {day && (
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-900">{day}</div>
+                                            {monthlyData[day] ? (
+                                                <div className="text-[9px] font-bold text-indigo-600">
+                                                    {monthlyData[day] < 60
+                                                        ? `${monthlyData[day]}m`
+                                                        : `${(monthlyData[day] / 60).toFixed(1)}h`}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[9px] text-gray-300">-</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 閉じるボタン */}
+                        <button
+                            onClick={() => setShowCalendar(false)}
+                            className="mt-4 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-bold rounded-xl transition"
+                        >
+                            閉じる
+                        </button>
                     </div>
-                </div>
+                </>
             )}
         </>
     );
@@ -203,7 +273,6 @@ const DailyStudyHours = ({ uid }) => {
 // --- Sub-component: Shared Assignments ---
 const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const { t } = useLanguage();
-    const { effect } = useEffectContext();
     const [assignments, setAssignments] = useState([]);
     const [pastAssignments, setPastAssignments] = useState([]);
     const [myStatus, setMyStatus] = useState({});
@@ -233,12 +302,12 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     };
 
     const [showPastAssignments, setShowPastAssignments] = useState(false);
-    const [burningId, setBurningId] = useState(null);
-    const [lottieEffect, setLottieEffect] = useState(null); // { assignmentId, effectType }
-    const isAnimating = useRef(false); // Lock to prevent rapid consecutive animations
-
-    // Memoize animation data to prevent re-parsing
-    const memoizedAnimationData = useMemo(() => popExplosionAnimation, []);
+    const [showCompleted, setShowCompleted] = useState(false);
+    // slashingId: アニメーション中のタスクID
+    const [slashingId, setSlashingId] = useState(null);
+    // checkPopId: チェックボタンのポップアニメーション用
+    const [checkPopId, setCheckPopId] = useState(null);
+    const isAnimating = useRef(false); // 連打防止ロック
 
 
     // Fetch Assignments (Global) - In real app, filter by subject match?
@@ -317,54 +386,36 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
         });
     };
 
-    // Handle toggle with effect animation
+    // タスク完了時の Slash エフェクト＋サウンド＋ハプティック
     const handleToggleComplete = async (assignmentId, currentStatus) => {
-        // Prevent rapid consecutive animations
-        if (isAnimating.current) {
-            return; // Ignore click if animation is in progress
-        }
+        // 連打防止
+        if (isAnimating.current) return;
 
-        // Only animate when completing a task (not when uncompleting)
         if (!currentStatus) {
-            isAnimating.current = true; // Lock
-            setBurningId(assignmentId);
+            // --- 完了にする場合 ---
+            isAnimating.current = true;
 
-            // Apply effect based on user settings
-            if (effect === 'burning') {
-                // Spawn emoji particles
-                const taskElement = document.querySelector(`[data-assignment-id="${assignmentId}"]`);
-                if (taskElement) {
-                    const rect = taskElement.getBoundingClientRect();
-                    const particleCount = 5;
+            // ① サウンド再生（Web Audio API）
+            playTaskCompleteSound();
 
-                    for (let i = 0; i < particleCount; i++) {
-                        const emoji = document.createElement('div');
-                        emoji.className = 'fire-emoji';
-                        emoji.textContent = '🔥';
-                        emoji.style.left = `${rect.left + (rect.width * (0.2 + i * 0.15))}px`;
-                        emoji.style.top = `${rect.top + rect.height / 2}px`;
-                        emoji.style.animationDelay = `${i * 0.1}s`;
-                        document.body.appendChild(emoji);
+            // ② ハプティックフィードバック（モバイル）
+            triggerHapticFeedback();
 
-                        // Remove emoji after animation completes
-                        setTimeout(() => emoji.remove(), 1000 + i * 100);
-                    }
-                }
-            } else if (effect === 'pop_explosion') {
-                // Show Lottie animation (cleanup handled by onComplete)
-                setLottieEffect({ assignmentId, effectType: 'pop_explosion' });
-            }
-            // Future effects can be added here with additional else if blocks
+            // ③ チェックボタンのポップアニメーション
+            setCheckPopId(assignmentId);
+            setTimeout(() => setCheckPopId(null), 350);
 
-            // Wait for animation to complete (increased to 1s for burning, 2s for pop_explosion)
-            const animationDuration = effect === 'pop_explosion' ? 1500 : 1000;
+            // ④ カード全体の slash アニメーション（少し遅れて開始）
+            setTimeout(() => setSlashingId(assignmentId), 150);
+
+            // ⑤ アニメーション後に Firestore 更新＋アンロック
             setTimeout(async () => {
                 await toggleComplete(assignmentId, currentStatus);
-                setBurningId(null);
-                isAnimating.current = false; // Unlock after animation completes
-            }, animationDuration);
+                setSlashingId(null);
+                isAnimating.current = false;
+            }, 700);
         } else {
-            // Immediately toggle if uncompleting
+            // --- 未完了に戻す場合 ---即時切り替え
             await toggleComplete(assignmentId, currentStatus);
         }
     };
@@ -475,15 +526,19 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
 
             <div className="space-y-2">
                 {assignments.length === 0 ? <p className="text-sm text-gray-400">{t('noAssignments')}</p> :
-                    // Sort: uncompleted first, completed last
-                    [...assignments].sort((a, b) => {
-                        const aCompleted = myStatus[a.id]?.completed || false;
-                        const bCompleted = myStatus[b.id]?.completed || false;
-                        if (aCompleted === bCompleted) return 0;
-                        return aCompleted ? 1 : -1;
-                    }).map(a => (
-                        <div key={a.id} data-assignment-id={a.id} className={`relative flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm ${burningId === a.id && effect === 'burning' ? 'burning-task' : ''}`}>
-                            <button onClick={() => handleToggleComplete(a.id, myStatus[a.id]?.completed)}>
+                    assignments.filter(a => !(myStatus[a.id]?.completed)).map(a => (
+                        <div
+                            key={a.id}
+                            data-assignment-id={a.id}
+                            className={`zen-item relative flex items-center gap-3 bg-white p-3 rounded-xl border-l-4 border-l-rose-400 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-[1px] transition-all duration-200 ${slashingId === a.id ? 'slashing-task' : ''}`}
+                        >
+                            {slashingId === a.id && <div className="slash-line" />}
+
+                            {/* チェックボタン */}
+                            <button
+                                onClick={() => handleToggleComplete(a.id, myStatus[a.id]?.completed)}
+                                className={`flex-shrink-0 ${checkPopId === a.id ? 'check-popping' : ''}`}
+                            >
                                 {myStatus[a.id]?.completed ? (
                                     <CheckCircle className="w-5 h-5 text-green-500" />
                                 ) : isDueTomorrow(a.dueDate) ? (
@@ -497,9 +552,10 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                     <Circle className="w-5 h-5 text-gray-300" />
                                 )}
                             </button>
-                            <div className="flex-1">
+
+                            {/* コンテンツエリア（編集中 or 表示中） */}
+                            <div className="flex-1 min-w-0">
                                 {editingId === a.id ? (
-                                    // Edit Mode
                                     <div className="space-y-2">
                                         <select
                                             className="block w-full p-2 rounded border-gray-300 text-sm"
@@ -534,83 +590,98 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                             onChange={e => setEditForm({ ...editForm, dueDate: e.target.value })}
                                         />
                                         <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleEditSave(a.id)}
-                                                className="flex-1 bg-indigo-600 text-white py-2 rounded text-sm font-bold"
-                                            >
-                                                {t('save')}
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingId(null)}
-                                                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded text-sm font-bold"
-                                            >
-                                                {t('cancel')}
-                                            </button>
+                                            <button onClick={() => handleEditSave(a.id)} className="flex-1 bg-indigo-600 text-white py-2 rounded text-sm font-bold">{t('save')}</button>
+                                            <button onClick={() => setEditingId(null)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded text-sm font-bold">{t('cancel')}</button>
                                         </div>
                                     </div>
                                 ) : (
-                                    // Display Mode
-                                    <>
-                                        <div className="flex justify-between">
+                                    /* 表示モード：エリア全体を「記録開始」ボタンとして機能させる */
+                                    <button
+                                        className="w-full text-left group/content rounded-lg px-2 py-1.5 hover:bg-indigo-50/60 transition-colors duration-150 cursor-pointer"
+                                        onClick={() => onAssignmentClick && onAssignmentClick(a)}
+                                        title="タップして学習記録を開始"
+                                    >
+                                        <div className="flex items-center gap-2 mb-0.5">
                                             <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
                                             {a.dueDate && <span className="text-xs text-gray-400">〆 {formatDate(a.dueDate)}</span>}
                                         </div>
-                                        <div
-                                            className={`text-sm font-medium cursor-pointer hover:underline ${myStatus[a.id]?.completed ? 'text-gray-400 line-through' : 'text-gray-800'
-                                                }`}
-                                            onClick={() => onAssignmentClick && onAssignmentClick(a)}
-                                        >
-                                            {a.content}
+                                        <div className="flex items-center gap-1.5">
+                                            <Play className="w-3.5 h-3.5 text-gray-300 group-hover/content:text-indigo-500 transition-colors flex-shrink-0" />
+                                            <span className="text-sm font-medium text-gray-800 truncate">{a.content}</span>
                                         </div>
-                                    </>
+                                    </button>
                                 )}
                             </div>
-                            {/* Edit/Delete buttons for author only */}
+
+                            {/* 編集・削除ボタン（作成者のみ、Zenスタイル） */}
                             {a.createdBy === user.uid && editingId !== a.id && (
-                                <div className="flex gap-1">
-                                    <button
-                                        onClick={() => handleEditStart(a)}
-                                        className="p-2 text-gray-400 hover:text-indigo-600 transition"
-                                        title="編集"
-                                    >
-                                        <Edit className="w-4 h-4" />
+                                <div className="zen-actions flex gap-1 flex-shrink-0">
+                                    <button onClick={() => handleEditStart(a)} className="p-1.5 text-gray-300 hover:text-indigo-500 transition" title="編集">
+                                        <Edit className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(a.id)}
-                                        className="p-2 text-gray-400 hover:text-red-600 transition"
-                                        title="削除"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
+                                    <button onClick={() => handleDelete(a.id)} className="p-1.5 text-gray-300 hover:text-red-500 transition" title="削除">
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
-                            )}
-
-                            {/* Lottie Effect Overlay for this item */}
-                            {lottieEffect && lottieEffect.assignmentId === a.id && lottieEffect.effectType === 'pop_explosion' && (
-                                <ExplosionOverlay
-                                    animationData={memoizedAnimationData}
-                                    onComplete={() => setLottieEffect(null)}
-                                />
                             )}
                         </div>
                     ))
                 }
             </div>
 
-            {/* Past Assignments Section */}
+            {/* 完了済みの現在の課題アーカイブ */}
+            {assignments.filter(a => myStatus[a.id]?.completed).length > 0 && (
+                <div className="mt-3">
+                    <button
+                        onClick={() => setShowCompleted(v => !v)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 transition w-full py-1"
+                    >
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        完了済 {assignments.filter(a => myStatus[a.id]?.completed).length}件
+                        <span className="ml-auto text-[10px]">{showCompleted ? '▲' : '▼'}</span>
+                    </button>
+                    {showCompleted && (
+                        <div className="space-y-1 mt-1">
+                            {assignments.filter(a => myStatus[a.id]?.completed).map(a => (
+                                <div key={a.id} className="zen-item flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200">
+                                    <button onClick={() => handleToggleComplete(a.id, true)}>
+                                        <CheckCircle className="w-5 h-5 text-green-400" />
+                                    </button>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{a.subject}</span>
+                                            <span className="text-sm text-gray-400 line-through truncate">{a.content}</span>
+                                        </div>
+                                    </div>
+                                    {a.createdBy === user.uid && (
+                                        <div className="zen-actions flex gap-1">
+                                            <button onClick={() => handleDelete(a.id)} className="p-1.5 text-gray-300 hover:text-red-500 transition" title="削除">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 過去の課題アーカイブ */}
             {pastAssignments.length > 0 && (
-                <div className="mt-4">
+                <div className="mt-3">
                     <button
                         onClick={() => setShowPastAssignments(!showPastAssignments)}
-                        className="w-full text-sm text-indigo-600 font-bold py-2 px-4 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition"
+                        className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 transition w-full py-1"
                     >
-                        {showPastAssignments ? t('hidePastAssignments') : t('showPastAssignments')}
+                        <History className="w-4 h-4 text-gray-400" />
+                        過去の課題 {pastAssignments.length}件
+                        <span className="ml-auto text-[10px]">{showPastAssignments ? '▲' : '▼'}</span>
                     </button>
 
                     {showPastAssignments && (
-                        <div className="mt-3 space-y-2">
+                        <div className="space-y-1 mt-1">
                             {[...pastAssignments].sort((a, b) => {
-                                // Sort by due date descending (most recent first)
                                 const aDate = a.dueDate ? new Date(a.dueDate) : new Date(0);
                                 const bDate = b.dueDate ? new Date(b.dueDate) : new Date(0);
                                 return bDate - aDate;
@@ -619,24 +690,34 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
                                 const completedWithinDeadline = isCompletedWithinDeadline(a, statusData);
 
                                 return (
-                                    <div key={a.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200">
-                                        {/* Read-only completion indicator */}
+                                    <div key={a.id} className="zen-item flex items-center gap-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                                         <div>
                                             {completedWithinDeadline ? (
-                                                <CheckCircle className="w-5 h-5 text-green-500" />
+                                                <CheckCircle className="w-5 h-5 text-green-400" />
                                             ) : (
                                                 <Circle className="w-5 h-5 text-gray-300" />
                                             )}
                                         </div>
-                                        <div className="flex-1">
-                                            <div className="flex justify-between">
-                                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{a.subject}</span>
-                                                {a.dueDate && <span className="text-xs text-gray-400">〆 {formatDate(a.dueDate)}</span>}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{a.subject}</span>
+                                                {a.dueDate && <span className="text-[10px] text-gray-400">〆 {formatDate(a.dueDate)}</span>}
                                             </div>
                                             <div className={`text-sm font-medium ${completedWithinDeadline ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
                                                 {a.content}
                                             </div>
                                         </div>
+                                        {a.createdBy === user.uid && (
+                                            <div className="zen-actions flex gap-1">
+                                                <button
+                                                    onClick={() => handleDelete(a.id)}
+                                                    className="p-1 text-gray-300 hover:text-red-500 transition"
+                                                    title="削除"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -648,20 +729,54 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     );
 };
 
+// 小さなドーナツ型プログレスリング（SVG）
+const ProgressRing = ({ total, done, color = '#6366f1' }) => {
+    const radius = 14;
+    const stroke = 3;
+    const normalizedRadius = radius - stroke / 2;
+    const circumference = 2 * Math.PI * normalizedRadius;
+    const progress = total === 0 ? 0 : done / total;
+    const strokeDashoffset = circumference * (1 - progress);
+    return (
+        <svg height={radius * 2} width={radius * 2} className="-rotate-90">
+            <circle
+                stroke="#e5e7eb"
+                fill="transparent"
+                strokeWidth={stroke}
+                r={normalizedRadius}
+                cx={radius}
+                cy={radius}
+            />
+            <circle
+                stroke={color}
+                fill="transparent"
+                strokeWidth={stroke}
+                strokeDasharray={`${circumference} ${circumference}`}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                r={normalizedRadius}
+                cx={radius}
+                cy={radius}
+                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+            />
+        </svg>
+    );
+};
+
 // --- Sub-component: Daily Routines ---
-const DailyRoutinesSection = ({ user }) => {
+const DailyRoutinesSection = ({ user, onStartTimer }) => {
     const { t } = useLanguage();
     const [routines, setRoutines] = useState([]);
     const [newRoutine, setNewRoutine] = useState('');
-    const [showHistory, setShowHistory] = useState(null);
+    const [isAdding, setIsAdding] = useState(false);
+    const [showCompleted, setShowCompleted] = useState(false);
+    const [slashingIds, setSlashingIds] = useState(new Set());
+    const [checkPopId, setCheckPopId] = useState(null);
+    const animatingRef = useRef(new Set());
 
-    // Get today's date in YYYY-MM-DD format
     const getTodayString = () => {
         const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     };
 
     useEffect(() => {
@@ -681,26 +796,48 @@ const DailyRoutinesSection = ({ user }) => {
             createdAt: serverTimestamp()
         });
         setNewRoutine('');
+        setIsAdding(false);
     };
 
-    const toggleComplete = async (routine) => {
+    const isCompletedToday = (routine) => {
+        return (routine.completedDates || []).includes(getTodayString());
+    };
+
+    const handleToggle = async (routine) => {
+        if (animatingRef.current.has(routine.id)) return;
+        const completedToday = isCompletedToday(routine);
         const today = getTodayString();
-        const completedDates = routine.completedDates || [];
-        const isCompleted = completedDates.includes(today);
 
-        let newCompletedDates;
-        if (isCompleted) {
-            // Remove today from the list
-            newCompletedDates = completedDates.filter(date => date !== today);
+        if (!completedToday) {
+            // 完了方向：エフェクト後に Firestore 更新
+            animatingRef.current.add(routine.id);
+            playTaskCompleteSound();
+            triggerHapticFeedback();
+            setCheckPopId(routine.id);
+            setTimeout(() => setCheckPopId(null), 350);
+
+            // Slashアニメーション
+            setTimeout(() => {
+                setSlashingIds(prev => new Set(prev).add(routine.id));
+            }, 150);
+
+            setTimeout(async () => {
+                const completedDates = routine.completedDates || [];
+                await setDoc(doc(db, `users/${user.uid}/dailyRoutines`, routine.id), {
+                    ...routine,
+                    completedDates: [...completedDates, today]
+                });
+                setSlashingIds(prev => { const n = new Set(prev); n.delete(routine.id); return n; });
+                animatingRef.current.delete(routine.id);
+            }, 700);
         } else {
-            // Add today to the list
-            newCompletedDates = [...completedDates, today];
+            // 未完了に戻す：即時
+            const newDates = (routine.completedDates || []).filter(d => d !== today);
+            await setDoc(doc(db, `users/${user.uid}/dailyRoutines`, routine.id), {
+                ...routine,
+                completedDates: newDates
+            });
         }
-
-        await setDoc(doc(db, `users/${user.uid}/dailyRoutines`, routine.id), {
-            ...routine,
-            completedDates: newCompletedDates
-        });
     };
 
     const handleDelete = async (id) => {
@@ -709,114 +846,147 @@ const DailyRoutinesSection = ({ user }) => {
         }
     };
 
-    const isCompletedToday = (routine) => {
-        const today = getTodayString();
-        return (routine.completedDates || []).includes(today);
-    };
-
-    // Format history dates for display
     const formatHistoryDates = (dates) => {
         if (!dates || dates.length === 0) return [];
-        // Sort dates in descending order (most recent first)
         return [...dates].sort((a, b) => b.localeCompare(a));
     };
 
+    const pending = routines.filter(r => !isCompletedToday(r));
+    const completed = routines.filter(r => isCompletedToday(r));
+    const total = routines.length;
+    const doneCount = completed.length;
+
     return (
         <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">{t('dailyRoutines')}</h2>
-
-            {/* Add Routine Form */}
-            <form onSubmit={handleAdd} className="bg-white p-3 rounded-lg border border-gray-200 mb-4 text-sm">
-                <input
-                    className="w-full p-2 border rounded mb-2"
-                    placeholder={t('dailyRoutineContent')}
-                    value={newRoutine}
-                    onChange={e => setNewRoutine(e.target.value)}
-                    required
-                />
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded font-medium text-xs">
-                    {t('addDailyRoutine')}
+            {/* セクションヘッダー */}
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-gray-900">{t('dailyRoutines')}</h2>
+                    {total > 0 && (
+                        <div className="flex items-center gap-1" title={`${doneCount}/${total}完了`}>
+                            <ProgressRing total={total} done={doneCount} />
+                            <span className="text-xs font-bold text-gray-500">{doneCount}/{total}</span>
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={() => setIsAdding(v => !v)}
+                    className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:text-indigo-800 transition"
+                >
+                    <Plus className="w-4 h-4" />追加
                 </button>
-            </form>
+            </div>
 
-            {/* Routines List */}
+            {/* インライン入力フォーム（アコーディオン） */}
+            {isAdding && (
+                <form onSubmit={handleAdd} className="form-expanding bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-3 text-sm">
+                    <input
+                        autoFocus
+                        className="w-full p-2 border border-indigo-200 rounded mb-2 bg-white text-sm"
+                        placeholder="毎日やることを入力..."
+                        value={newRoutine}
+                        onChange={e => setNewRoutine(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                        <button type="submit" className="flex-1 bg-indigo-600 text-white py-1.5 rounded text-xs font-bold">追加</button>
+                        <button type="button" onClick={() => { setIsAdding(false); setNewRoutine(''); }} className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded text-xs font-bold">キャンセル</button>
+                    </div>
+                </form>
+            )}
+
+            {/* 未完了リスト */}
             <div className="space-y-2">
-                {routines.length === 0 ? (
+                {pending.length === 0 && total === 0 && (
                     <p className="text-sm text-gray-400">{t('noDailyRoutines')}</p>
-                ) : (
-                    routines.map(routine => {
-                        const completedToday = isCompletedToday(routine);
-                        const historyDates = formatHistoryDates(routine.completedDates);
+                )}
+                {pending.map(routine => (
+                    <div
+                        key={routine.id}
+                        className={`zen-item relative flex items-center gap-3 bg-white p-3 rounded-xl border-l-4 border-l-green-400 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-[1px] transition-all duration-200 ${slashingIds.has(routine.id) ? 'slashing-task' : ''
+                            }`}
+                    >
+                        {slashingIds.has(routine.id) && <div className="slash-line" />}
+                        <button
+                            onClick={() => handleToggle(routine)}
+                            className={checkPopId === routine.id ? 'check-popping' : ''}
+                        >
+                            <Circle className="w-5 h-5 text-gray-300" />
+                        </button>
+                        <span className="flex-1 text-sm font-medium text-gray-800">{routine.content}</span>
+                        {/* Zenアクション（ホバー時のみ表示） */}
+                        <div className="zen-actions flex gap-1">
+                            {onStartTimer && (
+                                <button
+                                    onClick={() => onStartTimer({ content: routine.content })}
+                                    className="p-1.5 text-gray-300 hover:text-indigo-500 transition"
+                                    title="タイマーで記録開始"
+                                >
+                                    <Play className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            <button
+                                onClick={() => handleDelete(routine.id)}
+                                className="p-1.5 text-gray-300 hover:text-red-500 transition"
+                                title="削除"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
 
-                        return (
-                            <div key={routine.id}>
-                                <div className="bg-white p-3 rounded-lg border-l-4 border-l-green-500 shadow-sm flex items-center justify-between">
-                                    <div className="flex items-center gap-3 flex-1">
-                                        <button onClick={() => toggleComplete(routine)}>
-                                            {completedToday ? (
-                                                <CheckCircle className="w-5 h-5 text-green-500" />
-                                            ) : (
-                                                <Circle className="w-5 h-5 text-gray-300" />
-                                            )}
+            {/* 完了済アーカイブアコーディオン */}
+            {completed.length > 0 && (
+                <div className="mt-3">
+                    <button
+                        onClick={() => setShowCompleted(v => !v)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 transition w-full py-1"
+                    >
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        完了済 {completed.length}件
+                        <span className="ml-auto text-[10px]">{showCompleted ? '▲' : '▼'}</span>
+                    </button>
+                    {showCompleted && (
+                        <div className="space-y-1 mt-1">
+                            {completed.map(routine => {
+                                const historyDates = formatHistoryDates(routine.completedDates);
+                                return (
+                                    <div key={routine.id} className="zen-item flex items-center gap-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                        <button onClick={() => handleToggle(routine)}>
+                                            <CheckCircle className="w-5 h-5 text-green-400" />
                                         </button>
-                                        <div className="flex-1">
-                                            <div className={`text-sm font-medium ${completedToday ? 'text-gray-400 line-through' : 'text-gray-800'
-                                                }`}>
-                                                {routine.content}
-                                            </div>
+                                        <span className="flex-1 text-sm text-gray-400 line-through">{routine.content}</span>
+                                        <div className="zen-actions flex items-center gap-1">
+                                            <span className="text-[10px] text-gray-400">{historyDates[0] ? `最近: ${historyDates[0]}` : ''}</span>
+                                            <button
+                                                onClick={() => handleDelete(routine.id)}
+                                                className="p-1.5 text-gray-300 hover:text-red-500 transition"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={() => setShowHistory(showHistory === routine.id ? null : routine.id)}
-                                            className="p-2 text-gray-400 hover:text-indigo-600 transition"
-                                            title={t('viewHistory')}
-                                        >
-                                            <History className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(routine.id)}
-                                            className="p-2 text-gray-400 hover:text-red-500 transition"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* History Display */}
-                                {showHistory === routine.id && (
-                                    <div className="mt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                        <h4 className="text-xs font-bold text-gray-700 mb-2">{t('completionHistory')}</h4>
-                                        {historyDates.length === 0 ? (
-                                            <p className="text-xs text-gray-400">まだ実施履歴がありません</p>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-1">
-                                                {historyDates.map(date => (
-                                                    <span
-                                                        key={date}
-                                                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded"
-                                                    >
-                                                        {date}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
-                )}
-            </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
 
 // --- Sub-component: My Plans ---
-const MyPlansSection = ({ user, profile }) => {
+const MyPlansSection = ({ user, profile, onStartTimer }) => {
     const { t } = useLanguage();
     const [plans, setPlans] = useState([]);
     const [newPlan, setNewPlan] = useState({ date: '', subject: '', content: '' });
+    const [isAdding, setIsAdding] = useState(false);
+    const [showCompleted, setShowCompleted] = useState(false);
+    const [slashingIds, setSlashingIds] = useState(new Set());
+    const [checkPopId, setCheckPopId] = useState(null);
+    const animatingRef = useRef(new Set());
 
     useEffect(() => {
         const q = query(collection(db, `users/${user.uid}/myPlans`), orderBy('date', 'asc'));
@@ -835,83 +1005,263 @@ const MyPlansSection = ({ user, profile }) => {
             createdAt: serverTimestamp()
         });
         setNewPlan({ date: '', subject: '', content: '' });
+        setIsAdding(false);
     };
 
-    const toggleComplete = async (plan) => {
-        await setDoc(doc(db, `users/${user.uid}/myPlans`, plan.id), {
-            ...plan,
-            completed: !plan.completed
-        });
+    const handleToggle = async (plan) => {
+        if (animatingRef.current.has(plan.id)) return;
+        if (!plan.completed) {
+            animatingRef.current.add(plan.id);
+            playTaskCompleteSound();
+            triggerHapticFeedback();
+            setCheckPopId(plan.id);
+            setTimeout(() => setCheckPopId(null), 350);
+            setTimeout(() => {
+                setSlashingIds(prev => new Set(prev).add(plan.id));
+            }, 150);
+            setTimeout(async () => {
+                await setDoc(doc(db, `users/${user.uid}/myPlans`, plan.id), {
+                    ...plan, completed: true
+                });
+                setSlashingIds(prev => { const n = new Set(prev); n.delete(plan.id); return n; });
+                animatingRef.current.delete(plan.id);
+            }, 700);
+        } else {
+            await setDoc(doc(db, `users/${user.uid}/myPlans`, plan.id), {
+                ...plan, completed: false
+            });
+        }
     };
 
     const handleDelete = async (id) => {
         if (window.confirm('削除しますか？')) {
             await deleteDoc(doc(db, `users/${user.uid}/myPlans`, id));
         }
-    }
+    };
+
+    // 科目ごとのテーマカラー（寒色系）
+    const getSubjectColor = (subject) => {
+        if (!subject) return 'bg-gray-100 text-gray-600';
+        const s = subject.replace(/（.*?）/, '');
+        const map = {
+            '数学': 'bg-blue-100 text-blue-700',
+            '英語': 'bg-cyan-100 text-cyan-700',
+            '物理': 'bg-violet-100 text-violet-700',
+            '化学': 'bg-teal-100 text-teal-700',
+            '生物': 'bg-green-100 text-green-700',
+            '現代文': 'bg-orange-100 text-orange-700',
+            '古典': 'bg-amber-100 text-amber-700',
+            '地理': 'bg-lime-100 text-lime-700',
+            '情報': 'bg-sky-100 text-sky-700',
+            '歴史': 'bg-red-100 text-red-700',
+            '英論': 'bg-indigo-100 text-indigo-700',
+        };
+        return Object.entries(map).find(([k]) => s.includes(k))?.[1] || 'bg-slate-100 text-slate-600';
+    };
+
+    // 今日・明日の日付文字列
+    const getTodayString = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const getTomorrowString = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const today = getTodayString();
+    const tomorrow = getTomorrowString();
+
+    const pending = plans.filter(p => !p.completed);
+    const completedPlans = plans.filter(p => p.completed);
+    const total = plans.length;
+    const doneCount = completedPlans.length;
+
+    // 日付グループ
+    const todayPlans = pending.filter(p => p.date === today);
+    const tomorrowPlans = pending.filter(p => p.date === tomorrow);
+    const futurePlans = pending.filter(p => p.date && p.date > tomorrow);
+    const noDayPlans = pending.filter(p => !p.date || (p.date < today));
+
+    const renderPlanCard = (plan) => (
+        <div
+            key={plan.id}
+            className={`zen-item relative flex items-center gap-3 bg-white p-3 rounded-xl border-l-4 border-l-indigo-400 shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-[1px] transition-all duration-200 ${slashingIds.has(plan.id) ? 'slashing-task' : ''
+                }`}
+        >
+            {slashingIds.has(plan.id) && <div className="slash-line" />}
+            <button
+                onClick={() => handleToggle(plan)}
+                className={checkPopId === plan.id ? 'check-popping' : ''}
+            >
+                <Circle className="w-5 h-5 text-gray-300" />
+            </button>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${getSubjectColor(plan.subject)}`}>
+                        {plan.subject?.replace(/（.*?）/, '') || ''}
+                    </span>
+                    {plan.date && (
+                        <span className={`text-[10px] font-medium ${plan.date === today ? 'text-red-500 font-bold' :
+                            plan.date === tomorrow ? 'text-amber-500' : 'text-gray-400'
+                            }`}>
+                            {plan.date === today ? '🔴 今日' : plan.date === tomorrow ? '🟡 明日' : plan.date}
+                        </span>
+                    )}
+                </div>
+                <div className="text-sm font-medium text-gray-800 truncate">{plan.content}</div>
+            </div>
+            <div className="zen-actions flex gap-1">
+                {onStartTimer && (
+                    <button
+                        onClick={() => onStartTimer({ subject: plan.subject, content: plan.content })}
+                        className="p-1.5 text-gray-300 hover:text-indigo-500 transition"
+                        title="タイマーで記録開始"
+                    >
+                        <Play className="w-3.5 h-3.5" />
+                    </button>
+                )}
+                <button
+                    onClick={() => handleDelete(plan.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 transition"
+                    title="削除"
+                >
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+    );
 
     return (
         <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">{t('myPlans')}</h2>
+            {/* セクションヘッダー */}
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-gray-900">{t('myPlans')}</h2>
+                    {total > 0 && (
+                        <div className="flex items-center gap-1" title={`${doneCount}/${total}完了`}>
+                            <ProgressRing total={total} done={doneCount} color="#818cf8" />
+                            <span className="text-xs font-bold text-gray-500">{doneCount}/{total}</span>
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={() => setIsAdding(v => !v)}
+                    className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:text-indigo-800 transition"
+                >
+                    <Plus className="w-4 h-4" />追加
+                </button>
+            </div>
 
-            {/* Add Plan Form */}
-            <form onSubmit={handleAdd} className="bg-white p-3 rounded-lg border border-gray-200 mb-4 text-sm">
-                <div className="grid grid-cols-2 gap-2 mb-2">
+            {/* 折りたたみフォーム */}
+            {isAdding && (
+                <form onSubmit={handleAdd} className="form-expanding bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        <input
+                            type="date"
+                            className="p-2 border border-indigo-200 rounded bg-white text-sm"
+                            value={newPlan.date}
+                            onChange={e => setNewPlan({ ...newPlan, date: e.target.value })}
+                            required
+                        />
+                        <select
+                            className="p-2 border border-indigo-200 rounded bg-white text-sm"
+                            value={newPlan.subject}
+                            onChange={e => setNewPlan({ ...newPlan, subject: e.target.value })}
+                            required
+                        >
+                            <option value="">{t('planSubject')}</option>
+                            {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
                     <input
-                        type="date"
-                        className="p-2 border rounded"
-                        value={newPlan.date}
-                        onChange={e => setNewPlan({ ...newPlan, date: e.target.value })}
+                        autoFocus
+                        className="w-full p-2 border border-indigo-200 rounded mb-2 bg-white text-sm"
+                        placeholder={t('planContent')}
+                        value={newPlan.content}
+                        onChange={e => setNewPlan({ ...newPlan, content: e.target.value })}
                         required
                     />
-                    <select
-                        className="p-2 border rounded"
-                        value={newPlan.subject}
-                        onChange={e => setNewPlan({ ...newPlan, subject: e.target.value })}
-                        required
-                    >
-                        <option value="">{t('planSubject')}</option>
-                        {profile?.subjects?.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                <input
-                    className="w-full p-2 border rounded mb-2"
-                    placeholder={t('planContent')}
-                    value={newPlan.content}
-                    onChange={e => setNewPlan({ ...newPlan, content: e.target.value })}
-                    required
-                />
-                <button type="submit" className="w-full bg-gray-800 text-white py-2 rounded font-medium text-xs">{t('addToPlan')}</button>
-            </form>
-
-            <div className="space-y-2">
-                {plans.map(plan => (
-                    <div key={plan.id} className="bg-white p-3 rounded-lg border-l-4 border-l-indigo-500 shadow-sm flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => toggleComplete(plan)}>
-                                {plan.completed ? <CheckCircle className="w-5 h-5 text-green-500" /> : <Circle className="w-5 h-5 text-gray-300" />}
-                            </button>
-                            <div>
-                                <div className="text-xs text-gray-400 flex gap-2">
-                                    <span>{plan.date}</span>
-                                    <span className="font-bold text-indigo-600">{plan.subject}</span>
-                                </div>
-                                <div className={`text-sm font-medium ${plan.completed ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                                    {plan.content}
-                                </div>
-                            </div>
-                        </div>
-                        <button onClick={() => handleDelete(plan.id)} className="text-gray-300 hover:text-red-500">
-                            <Trash2 className="w-4 h-4" />
-                        </button>
+                    <div className="flex gap-2">
+                        <button type="submit" className="flex-1 bg-indigo-600 text-white py-1.5 rounded text-xs font-bold">追加</button>
+                        <button type="button" onClick={() => { setIsAdding(false); setNewPlan({ date: '', subject: '', content: '' }); }} className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded text-xs font-bold">キャンセル</button>
                     </div>
-                ))}
+                </form>
+            )}
+
+            {/* 未完了リスト（日付グループ化） */}
+            <div className="space-y-3">
+                {pending.length === 0 && (
+                    <p className="text-sm text-gray-400">プランがありません</p>
+                )}
+
+                {todayPlans.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1.5">今日</p>
+                        <div className="space-y-2">{todayPlans.map(renderPlanCard)}</div>
+                    </div>
+                )}
+                {tomorrowPlans.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-1.5">明日</p>
+                        <div className="space-y-2">{tomorrowPlans.map(renderPlanCard)}</div>
+                    </div>
+                )}
+                {futurePlans.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">それ以降</p>
+                        <div className="space-y-2">{futurePlans.map(renderPlanCard)}</div>
+                    </div>
+                )}
+                {noDayPlans.length > 0 && (
+                    <div className="space-y-2">{noDayPlans.map(renderPlanCard)}</div>
+                )}
             </div>
+
+            {/* 完了済アーカイブ */}
+            {completedPlans.length > 0 && (
+                <div className="mt-3">
+                    <button
+                        onClick={() => setShowCompleted(v => !v)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 transition w-full py-1"
+                    >
+                        <CheckCircle className="w-4 h-4 text-indigo-300" />
+                        完了済 {completedPlans.length}件
+                        <span className="ml-auto text-[10px]">{showCompleted ? '▲' : '▼'}</span>
+                    </button>
+                    {showCompleted && (
+                        <div className="space-y-1 mt-1">
+                            {completedPlans.map(plan => (
+                                <div key={plan.id} className="zen-item flex items-center gap-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <button onClick={() => handleToggle(plan)}>
+                                        <CheckCircle className="w-5 h-5 text-indigo-300" />
+                                    </button>
+                                    <div className="flex-1 min-w-0">
+                                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded mr-1 ${getSubjectColor(plan.subject)}`}>
+                                            {plan.subject?.replace(/（.*?）/, '') || ''}
+                                        </span>
+                                        <span className="text-xs text-gray-400 line-through">{plan.content}</span>
+                                    </div>
+                                    <div className="zen-actions">
+                                        <button
+                                            onClick={() => handleDelete(plan.id)}
+                                            className="p-1.5 text-gray-300 hover:text-red-500 transition"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
 
-const HomeView = ({ onAssignmentClick }) => {
+const HomeView = ({ onAssignmentClick, onStartTimer }) => {
     const { user, profile } = useAuth();
 
     return (
@@ -922,18 +1272,18 @@ const HomeView = ({ onAssignmentClick }) => {
             {/* PC: 左列(課題、マイプラン) / 右列(日課) */}
             <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
                 {/* 課題: Mobile(1番目), PC(左上) */}
-                <div className="order-1 md:order-1">
+                <div id="tour-assignments" className="order-1 md:order-1">
                     <AssignmentsSection user={user} profile={profile} onAssignmentClick={onAssignmentClick} />
                 </div>
 
                 {/* 日課: Mobile(2番目), PC(右上 - row-span-2で2行分) */}
-                <div className="order-2 md:order-2 md:row-span-2">
-                    <DailyRoutinesSection user={user} />
+                <div id="tour-routines" className="order-2 md:order-2 md:row-span-2">
+                    <DailyRoutinesSection user={user} onStartTimer={onStartTimer} />
                 </div>
 
                 {/* マイプラン: Mobile(3番目), PC(左下) */}
-                <div className="order-3 md:order-3">
-                    <MyPlansSection user={user} profile={profile} />
+                <div id="tour-myplans" className="order-3 md:order-3">
+                    <MyPlansSection user={user} profile={profile} onStartTimer={onStartTimer} />
                 </div>
             </div>
         </div>

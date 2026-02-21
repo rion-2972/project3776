@@ -1,43 +1,9 @@
 import React from 'react';
-import { useEffectContext } from '../../contexts/EffectContext';
-import { ArrowLeft, Check, Flame, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, Zap } from 'lucide-react';
 
 const EffectSettings = ({ onBack }) => {
-    const { effect: currentEffect, changeEffect, loading } = useEffectContext();
-
-    const effects = [
-        {
-            id: 'burning',
-            name: '燃焼（推奨）',
-            nameEn: 'Burning',
-            description: 'タスク完了時に炎のエフェクトが表示されます',
-            icon: Flame
-        },
-        {
-            id: 'pop_explosion',
-            name: 'ポップな爆発（非推奨/フリーズします）',
-            nameEn: 'Pop Explosion',
-            description: 'タスク完了時に豪華なアニメーションが表示されます',
-            icon: Sparkles
-        }
-    ];
-
-    const handleEffectChange = async (effectId) => {
-        try {
-            await changeEffect(effectId);
-        } catch (error) {
-            console.error('Error updating effect:', error);
-            alert('エフェクトの更新に失敗しました');
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-gray-500">読み込み中...</div>
-            </div>
-        );
-    }
+    // タスク完了エフェクトは Slash に統一されたため、設定項目なし
+    // 将来的に複数エフェクト対応する際の拡張ポイントとしてコンポーネントを保持
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -55,34 +21,37 @@ const EffectSettings = ({ onBack }) => {
             </div>
 
             <div className="max-w-md mx-auto px-4 pt-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    {effects.map((effect, index) => (
-                        <button
-                            key={effect.id}
-                            onClick={() => handleEffectChange(effect.id)}
-                            className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition ${index < effects.length - 1 ? 'border-b border-gray-100' : ''
-                                } ${currentEffect === effect.id ? 'bg-indigo-50' : ''}`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${currentEffect === effect.id ? 'bg-indigo-100' : 'bg-gray-100'
-                                    }`}>
-                                    <effect.icon className={`w-5 h-5 ${currentEffect === effect.id ? 'text-indigo-600' : 'text-gray-600'
-                                        }`} />
-                                </div>
-                                <div className="flex flex-col items-start">
-                                    <span className="text-sm font-medium text-gray-900">
-                                        {effect.name}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                        {effect.description}
-                                    </span>
-                                </div>
-                            </div>
-                            {currentEffect === effect.id && (
-                                <Check className="w-5 h-5 text-indigo-600" />
-                            )}
-                        </button>
-                    ))}
+                {/* 現在のエフェクト表示 */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+                    <div className="flex items-center gap-3 p-4 bg-indigo-50">
+                        <div className="p-2 rounded-lg bg-indigo-100">
+                            <Zap className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div className="flex-1">
+                            <span className="text-sm font-bold text-gray-900 block">Slash（推奨）</span>
+                            <span className="text-xs text-gray-500">タスク完了時に鋭い斬撃アニメーション・サウンド・振動が発生します</span>
+                        </div>
+                        <Check className="w-5 h-5 text-indigo-600" />
+                    </div>
+                </div>
+
+                {/* 説明テキスト */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                    <h2 className="text-sm font-bold text-gray-700 mb-2">エフェクトの詳細</h2>
+                    <ul className="space-y-2 text-xs text-gray-500">
+                        <li className="flex items-start gap-2">
+                            <span className="text-indigo-400 font-bold mt-0.5">▸</span>
+                            <span><span className="font-semibold text-gray-700">Slash アニメーション：</span>チェックした瞬間、打消し線が素早く引かれてカードがキレよく消えます</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <span className="text-indigo-400 font-bold mt-0.5">▸</span>
+                            <span><span className="font-semibold text-gray-700">サウンド：</span>Web Audio API による軽量な「カチッ」音で、アプリの読み込みを遅くしません</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <span className="text-indigo-400 font-bold mt-0.5">▸</span>
+                            <span><span className="font-semibold text-gray-700">バイブレーション：</span>スマートフォンでのみ動作する短い触覚フィードバックです</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>

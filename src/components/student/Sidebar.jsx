@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { X, BarChart3, Settings, PenTool, Home, Clock } from 'lucide-react';
+import { X, BarChart3, Settings, PenTool, Home, Clock, HelpCircle } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab, onTabChange }) => {
     const { t } = useLanguage();
@@ -113,6 +113,19 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                                     <Settings className="w-5 h-5 text-gray-600" />
                                 </div>
                                 <span className="text-sm font-bold text-gray-900">{t('sidebarSettings')}</span>
+                            </button>
+
+                            <button
+                                onClick={() => handleNavigation('userGuide')}
+                                className={`w-full flex items-center gap-3 p-4 rounded-xl transition ${activeView === 'userGuide'
+                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50'
+                                    : 'bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100'
+                                    } group`}
+                            >
+                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
+                                    <HelpCircle className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">{t('sidebarUserGuide')}</span>
                             </button>
                         </nav>
                     </div>

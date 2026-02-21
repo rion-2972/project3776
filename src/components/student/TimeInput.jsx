@@ -1,287 +1,560 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, RotateCcw, Check, Plus, Minus, ChevronUp, ChevronDown } from 'lucide-react';
 
-const TimeInput = ({ value, onChange, initialMode = 'manual', resetTrigger = 0 }) => {
-    const [mode, setMode] = useState(initialMode); // 'manual' | 'stopwatch'
+// ========================================
+// デバイス判定フック
+// ========================================
+const useIsMobile = (breakpoint = 640) => {
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
 
-    // Apply initialMode when it changes (e.g., from assignment click)
     useEffect(() => {
-        if (initialMode) {
-            setMode(initialMode);
+        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+
+    return isMobile;
+};
+
+// ========================================
+// 共通: プリセット時間の定義
+// ========================================
+const PRESETS = [
+    { label: '15分', value: 15 },
+    { label: '30分', value: 30 },
+    { label: '45分', value: 45 },
+    { label: '1時間', value: 60 },
+    { label: '1.5h', value: 90 },
+    { label: '2時間', value: 120 },
+    { label: '2.5h', value: 150 },
+    { label: '3時間', value: 180 },
+];
+
+// ========================================
+// 共通: 分→表示テキスト変換
+// ========================================
+const formatDisplayTime = (totalMinutes) => {
+    const m = Math.max(0, Math.round(totalMinutes));
+    if (m === 0) return '0分';
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    if (h === 0) return `${rem}分`;
+    if (rem === 0) return `${h}時間`;
+    return `${h}時間${rem}分`;
+};
+
+// ========================================
+// PC用: 案1 プリセットボタン ＋ アジャスター
+// ========================================
+const PresetInput = ({ value, onChange }) => {
+    const current = Number(value) || 0;
+
+    return (
+        <div className="space-y-4">
+            {/* プリセットボタン */}
+            <div className="grid grid-cols-4 gap-2">
+                {PRESETS.map(p => (
+                    <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => onChange(p.value)}
+                        className={`py-2.5 rounded-xl text-sm font-bold transition-all duration-150 ${current === p.value
+                            ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-300'
+                            : 'bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 hover:shadow-sm'
+                            }`}
+                    >
+                        {p.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* 微調整アジャスター */}
+            <div className="flex items-center justify-center gap-3">
+                <button
+                    type="button"
+                    onClick={() => onChange(Math.max(0, current - 5))}
+                    disabled={current <= 0}
+                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed active:scale-90"
+                >
+                    <Minus className="w-4 h-4" />
+                </button>
+
+                <div className="text-center min-w-[120px]">
+                    <div className="text-3xl font-black text-gray-900 tracking-tight">
+                        {formatDisplayTime(current)}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">合計 {current}分</div>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={() => onChange(current + 5)}
+                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-green-50 text-gray-500 hover:text-green-600 flex items-center justify-center transition-all active:scale-90"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ========================================
+// PC用: 案2 スライダーバー
+// ========================================
+const SliderInput = ({ value, onChange }) => {
+    const current = Number(value) || 0;
+    const max = 180;
+    const percentage = (current / max) * 100;
+
+    return (
+        <div className="space-y-4 py-2">
+            {/* 現在の値をリアルタイムで大きく表示 */}
+            <div className="text-center">
+                <div className="text-4xl font-black text-gray-900 tracking-tight">
+                    {formatDisplayTime(current)}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">合計 {current}分</div>
+            </div>
+
+            {/* スライダー */}
+            <div className="px-2">
+                <div className="relative">
+                    {/* カスタムトラック背景 */}
+                    <div className="absolute top-1/2 left-0 right-0 h-2 -mt-1 rounded-full bg-gray-200 pointer-events-none" />
+                    {/* 塗りつぶし部分 */}
+                    <div
+                        className="absolute top-1/2 left-0 h-2 -mt-1 rounded-full bg-gradient-to-r from-indigo-400 to-purple-500 pointer-events-none transition-all duration-75"
+                        style={{ width: `${percentage}%` }}
+                    />
+                    {/* input range */}
+                    <input
+                        type="range"
+                        min={0}
+                        max={max}
+                        step={5}
+                        value={current}
+                        onChange={(e) => onChange(Number(e.target.value))}
+                        className="relative w-full h-6 appearance-none bg-transparent cursor-pointer z-10 slider-thumb-custom"
+                    />
+                </div>
+                {/* メモリラベル */}
+                <div className="flex justify-between mt-1.5 text-[10px] text-gray-400 font-medium px-0.5">
+                    <span>0分</span>
+                    <span>30分</span>
+                    <span>1時間</span>
+                    <span>1.5h</span>
+                    <span>2時間</span>
+                    <span>2.5h</span>
+                    <span>3時間</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ========================================
+// PC用: 案3 デジタル直接入力
+// ========================================
+const DigitalInput = ({ value, onChange }) => {
+    const totalMinutes = Number(value) || 0;
+    const [h, setH] = useState(Math.floor(totalMinutes / 60));
+    const [m, setM] = useState(totalMinutes % 60);
+    const hoursRef = useRef(null);
+    const minsRef = useRef(null);
+
+    // 外部からの値変更を同期
+    useEffect(() => {
+        const val = Number(value) || 0;
+        setH(Math.floor(val / 60));
+        setM(val % 60);
+    }, [value]);
+
+    const commit = useCallback((newH, newM) => {
+        const clamped = Math.max(0, newH) * 60 + Math.max(0, Math.min(59, newM));
+        onChange(clamped);
+    }, [onChange]);
+
+    const handleHoursKey = (e) => {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const next = Math.min(5, h + 1);
+            setH(next);
+            commit(next, m);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = Math.max(0, h - 1);
+            setH(next);
+            commit(next, m);
+        } else if (e.key === 'Enter') {
+            // Enter キーで「分」の入力欄へフォーカス移動
+            e.preventDefault();
+            minsRef.current?.focus();
         }
-    }, [initialMode]);
+    };
 
-    // --- Manual Mode (Drum Roll) States ---
-    const [step, setStep] = useState(5); // 1 or 5
+    const handleMinutesKey = (e) => {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const next = Math.min(59, m + 5);
+            setM(next);
+            commit(h, next);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = Math.max(0, m - 5);
+            setM(next);
+            commit(h, next);
+        } else if (e.key === 'Enter') {
+            // Enter キーで値を確定し、フォーム送信させずにブラー
+            e.preventDefault();
+            minsRef.current?.blur();
+        }
+    };
 
-    // Committed values (what is sent to parent)
-    const [hours, setHours] = useState(0);
-    const [minutes, setMinutes] = useState(0);
+    const handleHoursChange = (e) => {
+        const v = e.target.value.replace(/[^0-9]/g, '');
+        const parsed = Math.min(5, Math.max(0, Number(v) || 0));
+        setH(parsed);
+        commit(parsed, m);
+    };
 
-    // Visual/Interactive values (what is shown during scroll)
+    const handleMinutesChange = (e) => {
+        const v = e.target.value.replace(/[^0-9]/g, '');
+        const parsed = Math.min(59, Math.max(0, Number(v) || 0));
+        setM(parsed);
+        commit(h, parsed);
+    };
+
+    return (
+        <div className="space-y-4 py-2">
+            <div className="flex items-center justify-center gap-2">
+                {/* 時間ボックス */}
+                <div className="flex flex-col items-center">
+                    <button
+                        type="button"
+                        onClick={() => { const n = Math.min(5, h + 1); setH(n); commit(n, m); }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 transition"
+                    >
+                        <ChevronUp className="w-5 h-5" />
+                    </button>
+                    <input
+                        ref={hoursRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={h}
+                        onChange={handleHoursChange}
+                        onKeyDown={handleHoursKey}
+                        className="w-16 h-16 text-center text-3xl font-black text-gray-900 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => { const n = Math.max(0, h - 1); setH(n); commit(n, m); }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 transition"
+                    >
+                        <ChevronDown className="w-5 h-5" />
+                    </button>
+                    <span className="text-[10px] font-bold text-gray-400 mt-0.5">時間</span>
+                </div>
+
+                <span className="text-3xl font-black text-gray-300 pb-6">:</span>
+
+                {/* 分ボックス */}
+                <div className="flex flex-col items-center">
+                    <button
+                        type="button"
+                        onClick={() => { const n = Math.min(59, m + 5); setM(n); commit(h, n); }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 transition"
+                    >
+                        <ChevronUp className="w-5 h-5" />
+                    </button>
+                    <input
+                        ref={minsRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={String(m).padStart(2, '0')}
+                        onChange={handleMinutesChange}
+                        onKeyDown={handleMinutesKey}
+                        className="w-16 h-16 text-center text-3xl font-black text-gray-900 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => { const n = Math.max(0, m - 5); setM(n); commit(h, n); }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 transition"
+                    >
+                        <ChevronDown className="w-5 h-5" />
+                    </button>
+                    <span className="text-[10px] font-bold text-gray-400 mt-0.5">分</span>
+                </div>
+            </div>
+
+            <div className="text-center text-sm text-gray-500">
+                合計: <span className="font-bold text-gray-900">{formatDisplayTime(totalMinutes)}</span>
+                <span className="text-xs text-gray-400 ml-2">（↑↓キーで増減可能）</span>
+            </div>
+        </div>
+    );
+};
+
+// ========================================
+// スマホ用: ホイール （既存のドラムロール、改良版）
+// ========================================
+const WheelInput = ({ value, onChange }) => {
+    const [step, setStep] = useState(5);
     const [visualHours, setVisualHours] = useState(0);
     const [visualMinutes, setVisualMinutes] = useState(0);
 
-    // Refs for scroll containers
     const hoursScrollRef = useRef(null);
     const minutesScrollRef = useRef(null);
-
-    // Debounce timers for committing value
     const hoursTimerRef = useRef(null);
     const minutesTimerRef = useRef(null);
-
-    // Flag to ignore scroll events when we programmatic switch input
     const isScrollingProgrammatically = useRef(false);
 
-    // Constants
     const ITEM_HEIGHT = 40;
-    //const PADDING = 60; // py-[60px]
-
-    // Generate options
-    const hourOptions = Array.from({ length: 6 }, (_, i) => i); // 0-5 hours
+    const hourOptions = Array.from({ length: 6 }, (_, i) => i);
     const getMinuteOptions = () => {
-        const max = step === 5 ? 55 : 59;
         const options = [];
-        for (let i = 0; i <= max; i += step) {
-            options.push(i);
-        }
+        const max = step === 5 ? 55 : 59;
+        for (let i = 0; i <= max; i += step) options.push(i);
         return options;
     };
     const minuteOptions = getMinuteOptions();
 
-    // --- Synchronization Logic ---
-
-    // 1. Initialize local state from prop value
+    // 外部変更を同期
     useEffect(() => {
         const val = Number(value) || 0;
         const h = Math.floor(val / 60);
         const m = val % 60;
+        setVisualHours(h);
+        setVisualMinutes(m);
+    }, [value]);
 
-        // Only update if different to avoid loops (though safe with primitives)
-        if (h !== hours || m !== minutes) {
-            setHours(h);
-            setVisualHours(h);
-            setMinutes(m);
-            setVisualMinutes(m);
-        }
-    }, [value, hours, minutes]);
-
-    // 2. Scroll to position when visual values change (initial load or external update)
-    // We use detailed dependency tracking to avoid fighting user scroll
+    // スクロール位置を同期
     useEffect(() => {
         if (!hoursScrollRef.current) return;
-        // Find index of current hour
         const index = hourOptions.indexOf(visualHours);
         if (index !== -1) {
-            const targetScroll = index * ITEM_HEIGHT;
-            if (Math.abs(hoursScrollRef.current.scrollTop - targetScroll) > 5) {
+            const target = index * ITEM_HEIGHT;
+            if (Math.abs(hoursScrollRef.current.scrollTop - target) > 5) {
                 isScrollingProgrammatically.current = true;
-                hoursScrollRef.current.scrollTop = targetScroll;
+                hoursScrollRef.current.scrollTop = target;
                 setTimeout(() => { isScrollingProgrammatically.current = false; }, 100);
             }
         }
-    }, [visualHours, hourOptions, ITEM_HEIGHT]); // Dependencies: only when the *intent* changes
+    }, [visualHours, hourOptions]);
 
     useEffect(() => {
         if (!minutesScrollRef.current) return;
         const index = minuteOptions.indexOf(visualMinutes);
         if (index !== -1) {
-            const targetScroll = index * ITEM_HEIGHT;
-            if (Math.abs(minutesScrollRef.current.scrollTop - targetScroll) > 5) {
+            const target = index * ITEM_HEIGHT;
+            if (Math.abs(minutesScrollRef.current.scrollTop - target) > 5) {
                 isScrollingProgrammatically.current = true;
-                minutesScrollRef.current.scrollTop = targetScroll;
+                minutesScrollRef.current.scrollTop = target;
                 setTimeout(() => { isScrollingProgrammatically.current = false; }, 100);
             }
         }
-    }, [visualMinutes, step, minuteOptions]); // Re-run when step changes too
-
-    // 3. Commit changes to parent (debounced) - handled in scroll handlers
-
-    // --- Scroll Handlers ---
+    }, [visualMinutes, step, minuteOptions]);
 
     const handleHoursScroll = () => {
         if (isScrollingProgrammatically.current) return;
-
         const container = hoursScrollRef.current;
         if (!container) return;
-
-        // Calculate focused item based on scrollTop
-        // At scrollTop 0, the first item is centered due to padding
-        const scrollTop = container.scrollTop;
-        const rawIndex = Math.round(scrollTop / ITEM_HEIGHT);
+        const rawIndex = Math.round(container.scrollTop / ITEM_HEIGHT);
         const index = Math.max(0, Math.min(rawIndex, hourOptions.length - 1));
         const selected = hourOptions[index];
+        if (selected !== visualHours) setVisualHours(selected);
 
-        // Update visual state immediately
-        if (selected !== visualHours) {
-            setVisualHours(selected);
-        }
-
-        // Debounce commit to parent
         if (hoursTimerRef.current) clearTimeout(hoursTimerRef.current);
         hoursTimerRef.current = setTimeout(() => {
-            setHours(selected);
-            // Calculate new total
-            const newTotal = selected * 60 + visualMinutes; // Use visualMinutes as it might be changing too
-            onChange(newTotal);
-        }, 150); // Faster debounce for snappier feel
+            onChange(selected * 60 + visualMinutes);
+        }, 150);
     };
 
     const handleMinutesScroll = () => {
         if (isScrollingProgrammatically.current) return;
-
         const container = minutesScrollRef.current;
         if (!container) return;
-
-        const scrollTop = container.scrollTop;
-        const rawIndex = Math.round(scrollTop / ITEM_HEIGHT);
+        const rawIndex = Math.round(container.scrollTop / ITEM_HEIGHT);
         const index = Math.max(0, Math.min(rawIndex, minuteOptions.length - 1));
         const selected = minuteOptions[index];
-
-        if (selected !== visualMinutes) {
-            setVisualMinutes(selected);
-        }
+        if (selected !== visualMinutes) setVisualMinutes(selected);
 
         if (minutesTimerRef.current) clearTimeout(minutesTimerRef.current);
         minutesTimerRef.current = setTimeout(() => {
-            setMinutes(selected);
-            const newTotal = visualHours * 60 + selected;
-            onChange(newTotal);
+            onChange(visualHours * 60 + selected);
         }, 150);
     };
 
     const handleStepChange = () => {
         const newStep = step === 5 ? 1 : 5;
         setStep(newStep);
-        // Logic to snap current minutes to new step is handled by visual recalc or parent update
-        // But let's be explicit:
         const newMax = newStep === 5 ? 55 : 59;
         let newMin = visualMinutes;
         if (newMin > newMax) newMin = newMax;
         newMin = Math.round(newMin / newStep) * newStep;
-
         setVisualMinutes(newMin);
-        setMinutes(newMin);
         onChange(visualHours * 60 + newMin);
     };
 
-    // --- Stopwatch Logic (Time-based with localStorage) ---
+    return (
+        <div className="text-center">
+            <div className="flex justify-end mb-2">
+                <button
+                    type="button"
+                    onClick={handleStepChange}
+                    className="text-xs font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 px-2 py-1 rounded"
+                >
+                    {step}分刻み
+                </button>
+            </div>
+
+            <div className="flex gap-2 justify-center items-center">
+                {/* 時間ピッカー */}
+                <div className="relative h-40 w-24 overflow-hidden bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="absolute top-1/2 left-0 right-0 h-10 -mt-5 bg-indigo-100 bg-opacity-50 border-t border-b border-indigo-200 pointer-events-none z-10" />
+                    <div
+                        ref={hoursScrollRef}
+                        onScroll={handleHoursScroll}
+                        className="h-full overflow-y-auto snap-y py-[60px] scrollbar-hide"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                        {hourOptions.map(h => (
+                            <div
+                                key={h}
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all ${visualHours === h ? 'font-bold text-indigo-700 text-xl' : 'text-gray-400 text-base'
+                                    }`}
+                            >
+                                {h}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-400 font-bold pointer-events-none">
+                        時間
+                    </div>
+                </div>
+
+                <div className="text-2xl font-bold text-gray-400 self-center pb-2">:</div>
+
+                {/* 分ピッカー */}
+                <div className="relative h-40 w-24 overflow-hidden bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="absolute top-1/2 left-0 right-0 h-10 -mt-5 bg-indigo-100 bg-opacity-50 border-t border-b border-indigo-200 pointer-events-none z-10" />
+                    <div
+                        ref={minutesScrollRef}
+                        onScroll={handleMinutesScroll}
+                        className="h-full overflow-y-auto snap-y py-[60px] scrollbar-hide"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                        {minuteOptions.map(m => (
+                            <div
+                                key={m}
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all ${visualMinutes === m ? 'font-bold text-indigo-700 text-xl' : 'text-gray-400 text-base'
+                                    }`}
+                            >
+                                {m}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-400 font-bold pointer-events-none">
+                        分
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-4 text-sm text-gray-500">
+                選択中: <span className="font-bold text-gray-900 text-lg">{visualHours}時間 {visualMinutes}分</span>
+                <span className="text-xs text-gray-400 ml-2">（合計 {visualHours * 60 + visualMinutes}分）</span>
+            </div>
+        </div>
+    );
+};
+
+// ========================================
+// 共通: ストップウォッチUI
+// ========================================
+const StopwatchInput = ({ value, onChange, resetTrigger }) => {
     const STORAGE_KEY = 'project3776_stopwatch_state';
 
     const [isRunning, setIsRunning] = useState(false);
-    const [startTime, setStartTime] = useState(null); // Timestamp when started/resumed
-    const [accumulatedSeconds, setAccumulatedSeconds] = useState(0); // Total paused time
-    const [displaySeconds, setDisplaySeconds] = useState(0); // Current display value
+    const [startTime, setStartTime] = useState(null);
+    const [accumulatedSeconds, setAccumulatedSeconds] = useState(0);
+    const [displaySeconds, setDisplaySeconds] = useState(0);
 
-    // Load state from localStorage on mount
+    // LocalStorage 読み込み
     useEffect(() => {
-        const savedState = localStorage.getItem(STORAGE_KEY);
-        if (savedState) {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
             try {
-                const { isRunning: savedRunning, startTime: savedStart, accumulatedSeconds: savedAccum } = JSON.parse(savedState);
-
-                if (savedRunning && savedStart) {
-                    // Was running when page closed - calculate elapsed time
-                    const elapsed = Math.floor((Date.now() - savedStart) / 1000);
-                    setAccumulatedSeconds(savedAccum + elapsed);
-                    setStartTime(Date.now()); // Reset start time to now
+                const { isRunning: r, startTime: s, accumulatedSeconds: a } = JSON.parse(saved);
+                if (r && s) {
+                    const elapsed = Math.floor((Date.now() - s) / 1000);
+                    setAccumulatedSeconds(a + elapsed);
+                    setStartTime(Date.now());
                     setIsRunning(true);
-                } else if (savedAccum > 0) {
-                    // Was paused - restore accumulated time
-                    setAccumulatedSeconds(savedAccum);
-                    setDisplaySeconds(savedAccum);
+                } else if (a > 0) {
+                    setAccumulatedSeconds(a);
+                    setDisplaySeconds(a);
                 }
             } catch (e) {
-                console.error('Failed to parse stopwatch state:', e);
+                console.error('ストップウォッチ復元エラー:', e);
             }
         }
     }, []);
 
-    // Save state to localStorage whenever it changes
+    // LocalStorage 保存
     useEffect(() => {
-        const state = {
-            isRunning,
-            startTime,
-            accumulatedSeconds
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ isRunning, startTime, accumulatedSeconds }));
     }, [isRunning, startTime, accumulatedSeconds]);
 
-    // Update display every second when running
+    // 毎秒更新
     useEffect(() => {
         if (!isRunning || !startTime) {
             setDisplaySeconds(accumulatedSeconds);
             return;
         }
-
         const interval = setInterval(() => {
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTime) / 1000);
-            setDisplaySeconds(accumulatedSeconds + elapsed);
+            setDisplaySeconds(accumulatedSeconds + Math.floor((Date.now() - startTime) / 1000));
         }, 1000);
-
         return () => clearInterval(interval);
     }, [isRunning, startTime, accumulatedSeconds]);
 
-    // Sync stopwatch time to parent component in real-time
+    // リアルタイム親連携
     useEffect(() => {
-        if (mode === 'stopwatch' && displaySeconds >= 60) {
-            const mins = Math.floor(displaySeconds / 60);
-            onChange(mins);
+        if (displaySeconds >= 60) {
+            onChange(Math.floor(displaySeconds / 60));
         }
-    }, [mode, displaySeconds, onChange]);
+    }, [displaySeconds, onChange]);
 
-    // Reset stopwatch when parent triggers reset (e.g., after successful record submission)
+    // リセットトリガー
     useEffect(() => {
-        if (resetTrigger > 0) {
-            resetStopwatch();
-        }
+        if (resetTrigger > 0) reset();
     }, [resetTrigger]);
 
-    const formatStopwatch = (totalSeconds) => {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const formatSW = (s) => {
+        const hh = Math.floor(s / 3600);
+        const mm = Math.floor((s % 3600) / 60);
+        const ss = s % 60;
+        return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
     };
 
-    const toggleStopwatch = () => {
+    const toggle = () => {
         if (isRunning) {
-            // Pause: save accumulated time
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTime) / 1000);
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
             setAccumulatedSeconds(accumulatedSeconds + elapsed);
             setIsRunning(false);
             setStartTime(null);
         } else {
-            // Start/Resume: set new start time
             setStartTime(Date.now());
             setIsRunning(true);
         }
     };
 
-    const applyStopwatch = () => {
+    const apply = () => {
         const mins = Math.max(1, Math.floor(displaySeconds / 60));
         onChange(mins);
-
-        // Check if the time is not divisible by 5
-        // If so, switch to 1-minute step mode to avoid value reset
-        if (mins % 5 !== 0) {
-            setStep(1);
-        }
-
-        // Reset everything
-        setIsRunning(false);
-        setStartTime(null);
-        setAccumulatedSeconds(0);
-        setDisplaySeconds(0);
-        localStorage.removeItem(STORAGE_KEY);
-
+        reset();
         alert(`ストップウォッチの記録（${mins}分）をセットしました`);
-        setMode('manual');
     };
 
-    const resetStopwatch = () => {
+    const reset = () => {
         setIsRunning(false);
         setStartTime(null);
         setAccumulatedSeconds(0);
@@ -290,148 +563,157 @@ const TimeInput = ({ value, onChange, initialMode = 'manual', resetTrigger = 0 }
     };
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-            {/* Tab Switcher */}
-            <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
+        <div className="text-center py-4">
+            <div className="text-5xl font-mono font-bold text-gray-900 mb-6 tracking-wider">
+                {formatSW(displaySeconds)}
+            </div>
+
+            <div className="flex justify-center gap-4 mb-6">
                 <button
                     type="button"
-                    onClick={() => setMode('manual')}
-                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${mode === 'manual' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    onClick={toggle}
+                    className={`w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg ${isRunning
+                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        : 'bg-green-500 hover:bg-green-600 text-white'
                         }`}
                 >
-                    手動入力
+                    {isRunning ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
                 </button>
                 <button
                     type="button"
-                    onClick={() => setMode('stopwatch')}
-                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${mode === 'stopwatch' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                        }`}
+                    onClick={reset}
+                    disabled={displaySeconds === 0 && !isRunning}
+                    className="w-16 h-16 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
-                    ストップウォッチ
+                    <RotateCcw className="w-6 h-6" />
                 </button>
             </div>
 
-            {mode === 'manual' ? (
-                <div className="text-center">
-                    <div className="flex justify-end mb-2">
-                        <button
-                            type="button"
-                            onClick={handleStepChange}
-                            className="text-xs font-bold text-indigo-600 border border-indigo-200 bg-indigo-50 px-2 py-1 rounded"
-                        >
-                            {step}分刻み
-                        </button>
-                    </div>
+            <button
+                type="button"
+                onClick={apply}
+                disabled={displaySeconds < 60}
+                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-gray-300 transition"
+            >
+                <Check className="w-5 h-5" />
+                この時間を入力 ({Math.floor(displaySeconds / 60)}分)
+            </button>
+            {displaySeconds > 0 && displaySeconds < 60 && <p className="text-xs text-red-500 mt-2">※1分以上から記録可能です</p>}
+        </div>
+    );
+};
 
-                    {/* Dual Drum Roll */}
-                    <div className="flex gap-2 justify-center items-center">
-                        {/* Hours Picker */}
-                        <div className="relative h-40 w-24 overflow-hidden bg-gray-50 rounded-lg border border-gray-200">
-                            {/* Fixed center highlight bar - semi-transparent */}
-                            <div className="absolute top-1/2 left-0 right-0 h-10 -mt-5 bg-indigo-100 bg-opacity-50 border-t border-b border-indigo-200 pointer-events-none z-10"></div>
+// ========================================
+// モード定義（コンポーネント外の定数）
+// ========================================
+const MOBILE_MODES = [
+    { id: 'wheel', label: 'ホイール' },
+    { id: 'stopwatch', label: 'ストップウォッチ' },
+];
+const PC_MODES = [
+    { id: 'preset', label: 'クイック' },
+    { id: 'slider', label: 'スライダー' },
+    { id: 'digital', label: 'テンキー' },
+    { id: 'stopwatch', label: 'ストップウォッチ' },
+];
 
-                            <div
-                                ref={hoursScrollRef}
-                                onScroll={handleHoursScroll}
-                                className="h-full overflow-y-auto snap-y py-[60px] scrollbar-hide"
-                                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                            >
-                                {hourOptions.map(h => (
-                                    <div
-                                        key={h}
-                                        className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all ${visualHours === h ? 'font-bold text-indigo-700 text-xl' : 'text-gray-400 text-base'
-                                            }`}
-                                    >
-                                        {h}
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-400 font-bold pointer-events-none">
-                                時間
-                            </div>
-                        </div>
+// ========================================
+// メインコンポーネント
+// ========================================
+const TimeInput = ({ value, onChange, initialMode = 'manual', resetTrigger = 0 }) => {
+    const isMobile = useIsMobile();
 
-                        {/* Separator - centered */}
-                        <div className="text-2xl font-bold text-gray-400 self-center pb-2">:</div>
+    // モード定義
+    const modes = isMobile ? MOBILE_MODES : PC_MODES;
 
-                        {/* Minutes Picker */}
-                        <div className="relative h-40 w-24 overflow-hidden bg-gray-50 rounded-lg border border-gray-200">
-                            {/* Fixed center highlight bar - semi-transparent */}
-                            <div className="absolute top-1/2 left-0 right-0 h-10 -mt-5 bg-indigo-100 bg-opacity-50 border-t border-b border-indigo-200 pointer-events-none z-10"></div>
+    // 初期モード判定
+    const getInitialMode = () => {
+        if (initialMode === 'stopwatch') return 'stopwatch';
+        return isMobile ? 'wheel' : 'preset';
+    };
+    const [mode, setMode] = useState(getInitialMode);
 
-                            <div
-                                ref={minutesScrollRef}
-                                onScroll={handleMinutesScroll}
-                                className="h-full overflow-y-auto snap-y py-[60px] scrollbar-hide"
-                                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                            >
-                                {minuteOptions.map(m => (
-                                    <div
-                                        key={m}
-                                        className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all ${visualMinutes === m ? 'font-bold text-indigo-700 text-xl' : 'text-gray-400 text-base'
-                                            }`}
-                                    >
-                                        {m}
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-400 font-bold pointer-events-none">
-                                分
-                            </div>
-                        </div>
-                    </div>
+    // デバイス切り替え時にモードを修正
+    useEffect(() => {
+        if (isMobile && mode !== 'wheel' && mode !== 'stopwatch') {
+            setMode('wheel');
+        } else if (!isMobile && mode === 'wheel') {
+            setMode('preset');
+        }
+    }, [isMobile, mode]);
 
-                    <div className="mt-4 text-sm text-gray-500">
-                        選択中: <span className="font-bold text-gray-900 text-lg">{visualHours}時間 {visualMinutes}分</span>
-                        <span className="text-xs text-gray-400 ml-2">（合計 {visualHours * 60 + visualMinutes}分）</span>
-                    </div>
-                </div>
-            ) : (
-                <div className="text-center py-4">
-                    <div className="text-5xl font-mono font-bold text-gray-900 mb-6 tracking-wider">
-                        {formatStopwatch(displaySeconds)}
-                    </div>
+    // initialMode が外部から変わった時
+    useEffect(() => {
+        if (initialMode === 'stopwatch') {
+            setMode('stopwatch');
+        }
+    }, [initialMode]);
 
-                    <div className="flex justify-center gap-4 mb-6">
-                        <button
-                            type="button"
-                            onClick={toggleStopwatch}
-                            className={`w-16 h-16 rounded-full flex items-center justify-center transition shadow-lg ${isRunning
-                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                : 'bg-green-500 hover:bg-green-600 text-white'
-                                }`}
-                        >
-                            {isRunning ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={resetStopwatch}
-                            disabled={displaySeconds === 0 && !isRunning}
-                            className="w-16 h-16 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                            <RotateCcw className="w-6 h-6" />
-                        </button>
-                    </div>
-
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+            {/* タブ切り替え */}
+            <div className={`flex bg-gray-100 rounded-lg p-1 mb-4 ${modes.length > 3 ? 'gap-0.5' : 'gap-1'}`}>
+                {modes.map(m => (
                     <button
+                        key={m.id}
                         type="button"
-                        onClick={applyStopwatch}
-                        disabled={displaySeconds < 60}
-                        className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-gray-300 transition"
+                        onClick={() => setMode(m.id)}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition whitespace-nowrap ${mode === m.id
+                            ? 'bg-white text-indigo-600 shadow-sm font-bold'
+                            : 'text-gray-500 hover:text-gray-700'
+                            }`}
                     >
-                        <Check className="w-5 h-5" />
-                        この時間を入力 ({Math.floor(displaySeconds / 60)}分)
+                        {m.label}
                     </button>
-                    {displaySeconds > 0 && displaySeconds < 60 && <p className="text-xs text-red-500 mt-2">※1分以上から記録可能です</p>}
-                </div>
-            )}
+                ))}
+            </div>
+
+            {/* モード別UI */}
+            {mode === 'wheel' && <WheelInput value={value} onChange={onChange} />}
+            {mode === 'preset' && <PresetInput value={value} onChange={onChange} />}
+            {mode === 'slider' && <SliderInput value={value} onChange={onChange} />}
+            {mode === 'digital' && <DigitalInput value={value} onChange={onChange} />}
+            {mode === 'stopwatch' && <StopwatchInput value={value} onChange={onChange} resetTrigger={resetTrigger} />}
 
             <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
+                .scrollbar-hide::-webkit-scrollbar {
+                    display: none;
+                }
+                /* スライダーのツマミ（Webkit） */
+                .slider-thumb-custom::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    background: white;
+                    border: 3px solid #6366f1;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+                    cursor: pointer;
+                    transition: transform 0.1s;
+                }
+                .slider-thumb-custom::-webkit-slider-thumb:hover {
+                    transform: scale(1.15);
+                }
+                .slider-thumb-custom::-webkit-slider-thumb:active {
+                    transform: scale(0.95);
+                    border-color: #4f46e5;
+                }
+                /* Firefox */
+                .slider-thumb-custom::-moz-range-thumb {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    background: white;
+                    border: 3px solid #6366f1;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+                    cursor: pointer;
+                }
+                .slider-thumb-custom::-moz-range-track {
+                    background: transparent;
+                    border: none;
+                }
+            `}</style>
         </div>
     );
 };
