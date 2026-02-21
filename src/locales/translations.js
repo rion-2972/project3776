@@ -22,6 +22,7 @@ export const translations = {
         sidebarWelcome: 'ようこそ',
         sidebarStatistics: '学習記録の統計',
         sidebarSettings: '設定',
+        sidebarUserGuide: '使い方ガイド',
 
         // Home View
         todayStudyTime: '今日の学習時間',
@@ -149,6 +150,7 @@ export const translations = {
         sidebarWelcome: 'Welcome',
         sidebarStatistics: 'Study Statistics',
         sidebarSettings: 'Settings',
+        sidebarUserGuide: 'User Guide',
 
         // Home View
         todayStudyTime: "Today's Study Time",

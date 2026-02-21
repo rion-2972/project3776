@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { BookOpen, Send, Plus } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { BookOpen, Send, Plus, X, Zap, History } from 'lucide-react';
+import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, Timestamp, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { SUBJECT_GROUPS, TASKS } from '../../utils/constants';
-import TimeInput from './TimeInput'; // Import the new component
-import { X } from 'lucide-react';
+import TimeInput from './TimeInput';
+
+// 集中度スタンプの定義
+const FOCUS_LEVELS = [
+    { id: 'high', emoji: '🔥', label: '超集中', color: 'bg-orange-50 text-orange-700 ring-orange-300' },
+    { id: 'normal', emoji: '👍', label: '普通', color: 'bg-blue-50 text-blue-700 ring-blue-300' },
+    { id: 'low', emoji: '💦', label: 'いまいち', color: 'bg-gray-100 text-gray-600 ring-gray-300' },
+];
 
 const RecordView = ({ preFillData, onPreFillApplied }) => {
     const { profile, user } = useAuth();
@@ -17,14 +23,18 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
         subject: '',
         selectedItem: '',
         contentDetails: '',
-        duration: '', // Now handled by TimeInput (still numeric minutes)
+        duration: '',
         comment: ''
     });
 
     const [submitting, setSubmitting] = useState(false);
-    const [initialMode, setInitialMode] = useState('manual'); // For TimeInput
-    const [resetTrigger, setResetTrigger] = useState(0); // For resetting TimeInput stopwatch
-    const [customDate, setCustomDate] = useState(''); // For optional date selection
+    const [initialMode, setInitialMode] = useState('manual');
+    const [resetTrigger, setResetTrigger] = useState(0);
+    const [customDate, setCustomDate] = useState('');
+    const [focusLevel, setFocusLevel] = useState(null); // 集中度スタンプ
+
+    // クイック入力サジェスト用
+    const [recentRecords, setRecentRecords] = useState([]);
 
     // Reference Books State
     const [referenceBooks, setReferenceBooks] = useState([]);
@@ -51,6 +61,40 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
 
         return () => unsubscribe();
     }, [user]);
+
+    // 過去の記録を取得（クイック入力サジェスト用）
+    useEffect(() => {
+        if (!user) return;
+
+        const q = query(
+            collection(db, 'users', user.uid, 'studyRecords'),
+            orderBy('createdAt', 'desc'),
+            limit(30)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(d => d.data());
+            setRecentRecords(data);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    // よく記録するタスクTOP3を計算
+    const quickSuggestions = useMemo(() => {
+        const counts = {};
+        recentRecords.forEach(r => {
+            const key = `${r.subject}|||${r.content?.split(' ')[0] || ''}`;
+            counts[key] = (counts[key] || 0) + 1;
+        });
+        return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([key]) => {
+                const [subject, task] = key.split('|||');
+                return { subject, task };
+            });
+    }, [recentRecords]);
 
     // Apply pre-filled data when it changes
     useEffect(() => {
@@ -181,9 +225,13 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 userType: profile.type || 'riken'
             };
 
+            // 集中度スタンプ
+            if (focusLevel) {
+                recordData.focusLevel = focusLevel;
+            }
+
             // If custom date is specified, use it; otherwise use serverTimestamp
             if (customDate) {
-                // Parse the selected date and set time to noon (12:00) to avoid timezone issues
                 const dateObj = new Date(customDate);
                 dateObj.setHours(12, 0, 0, 0);
                 recordData.createdAt = Timestamp.fromDate(dateObj);
@@ -204,7 +252,8 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 duration: '',
                 comment: ''
             });
-            setCustomDate(''); // Reset custom date
+            setCustomDate('');
+            setFocusLevel(null);
 
             // Trigger stopwatch reset in TimeInput
             setResetTrigger(prev => prev + 1);
@@ -218,9 +267,18 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
 
     const currentSubjectBooks = referenceBooks.filter(book => book.subject === record.subject);
 
+    // クイック入力の適用
+    const applyQuickSuggestion = (suggestion) => {
+        setRecord(prev => ({
+            ...prev,
+            subject: suggestion.subject,
+            selectedItem: suggestion.task
+        }));
+    };
+
     return (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
-            <div className="p-6 border-b border-gray-100 bg-indigo-50">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-8">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                 <h2 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
                     <BookOpen className="w-6 h-6" />
                     {t('recordStudy')}
@@ -228,6 +286,31 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                {/* クイック入力サジェスト */}
+                {quickSuggestions.length > 0 && !record.subject && (
+                    <div id="tour-quick-input">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <Zap className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-xs font-bold text-gray-400">クイック入力</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {quickSuggestions.map((s, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => applyQuickSuggestion(s)}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-sm font-medium transition-all hover:shadow-sm active:scale-95"
+                                >
+                                    <History className="w-3 h-3 text-amber-500" />
+                                    <span className="text-xs font-bold text-amber-600">{s.subject?.replace(/（.*?）/, '')}</span>
+                                    <span className="text-gray-400">·</span>
+                                    <span>{s.task}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Subject Selection */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -426,11 +509,34 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                 </div>
 
                 {/* Time Input (Enhanced) */}
-                <div>
+                <div id="tour-stopwatch">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         {t('studyTimeLabel')} <span className="text-red-500">{t('required')}</span>
                     </label>
                     <TimeInput value={record.duration} onChange={handleDurationChange} initialMode={initialMode} resetTrigger={resetTrigger} />
+                </div>
+
+                {/* 集中度スタンプ */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        集中度 <span className="text-xs text-gray-400 font-normal">（任意）</span>
+                    </label>
+                    <div className="flex gap-2">
+                        {FOCUS_LEVELS.map(level => (
+                            <button
+                                key={level.id}
+                                type="button"
+                                onClick={() => setFocusLevel(focusLevel === level.id ? null : level.id)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all duration-150 ${focusLevel === level.id
+                                    ? `${level.color} ring-2 scale-105 shadow-sm`
+                                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                                    }`}
+                            >
+                                <span className="text-lg">{level.emoji}</span>
+                                <span className="text-xs">{level.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Comment */}
@@ -444,7 +550,7 @@ const RecordView = ({ preFillData, onPreFillApplied }) => {
                         onChange={handleChange}
                         placeholder={t('commentPlaceholder')}
                         rows="3"
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
                 </div>
 
