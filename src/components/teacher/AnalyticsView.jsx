@@ -105,16 +105,31 @@ const AnalyticsView = () => {
 
     const fetchBounds = useCallback(async () => {
         try {
+            // キャッシュ確認（bounds は当日中有効）
+            const cacheKey = `analyticsCache_bounds_${new Date().toISOString().slice(0, 10)}`;
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                const { earliest, latest } = JSON.parse(cached);
+                if (earliest) setEarliestRecordDate(new Date(earliest));
+                if (latest) setLatestRecordDate(new Date(latest));
+                return;
+            }
+
             const earliestQuery = query(collectionGroup(db, 'studyRecords'), orderBy('createdAt', 'asc'), limit(1));
             const earliestSnapshot = await getDocs(earliestQuery);
+            let earliest = null;
             if (!earliestSnapshot.empty) {
-                setEarliestRecordDate(earliestSnapshot.docs[0].data().createdAt.toDate());
+                earliest = earliestSnapshot.docs[0].data().createdAt.toDate().toISOString();
+                setEarliestRecordDate(new Date(earliest));
             }
             const latestQuery = query(collectionGroup(db, 'studyRecords'), orderBy('createdAt', 'desc'), limit(1));
             const latestSnapshot = await getDocs(latestQuery);
+            let latest = null;
             if (!latestSnapshot.empty) {
-                setLatestRecordDate(latestSnapshot.docs[0].data().createdAt.toDate());
+                latest = latestSnapshot.docs[0].data().createdAt.toDate().toISOString();
+                setLatestRecordDate(new Date(latest));
             }
+            sessionStorage.setItem(cacheKey, JSON.stringify({ earliest, latest }));
         } catch (error) {
             console.error('Error fetching bounds:', error);
         }
@@ -123,11 +138,23 @@ const AnalyticsView = () => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
+            // 生徒一覧（セッション中1回のみ取得）
             if (students.length === 0) {
                 const studentsQuery = query(collection(db, 'users'), where('role', '==', 'student'));
                 const studentsSnapshot = await getDocs(studentsQuery);
                 setStudents(studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             }
+
+            // 月間学習記録：sessionStorage キャッシュを確認
+            const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+            const cacheKey = `analyticsCache_records_${monthKey}`;
+            const cached = sessionStorage.getItem(cacheKey);
+            if (cached) {
+                setStudyRecords(JSON.parse(cached));
+                setLoading(false);
+                return;
+            }
+
             const start = startOfMonth(currentMonth);
             const end = endOfMonth(currentMonth);
             const recordsQuery = query(
@@ -136,11 +163,22 @@ const AnalyticsView = () => {
                 where('createdAt', '<=', end)
             );
             const recordsSnapshot = await getDocs(recordsQuery);
-            setStudyRecords(recordsSnapshot.docs.map(doc => ({
+            const records = recordsSnapshot.docs.map(doc => ({
                 id: doc.id,
                 userId: doc.ref.parent.parent.id,
-                ...doc.data()
-            })));
+                ...doc.data(),
+                // Timestamp は JSON 化できないため秒数に変換
+                createdAt: doc.data().createdAt?.toDate().toISOString() ?? null,
+            }));
+
+            // 過去の月のみキャッシュ保存（今月は随時更新されるためキャッシュしない）
+            const now = new Date();
+            const isCurrentMonth = isSameMonth(currentMonth, now);
+            if (!isCurrentMonth) {
+                try { sessionStorage.setItem(cacheKey, JSON.stringify(records)); } catch (_) { /* 容量超過時は無視 */ }
+            }
+
+            setStudyRecords(records);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -306,7 +344,7 @@ const AnalyticsView = () => {
         const todayMinutesMap = {};
         studyRecords.forEach(r => {
             if (!r.createdAt) return;
-            const d = r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt.seconds * 1000);
+            const d = new Date(r.createdAt);
             const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             if (dStr === todayStr) {
                 todayMinutesMap[r.userId] = (todayMinutesMap[r.userId] || 0) + (r.duration || 0);
