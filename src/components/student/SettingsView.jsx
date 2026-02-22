@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Globe, BookOpen, ClipboardList, LogOut, GraduationCap, Sparkles, History } from 'lucide-react';
+import { ArrowLeft, Globe, BookOpen, ClipboardList, LogOut, GraduationCap, Sparkles, History, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -37,6 +37,12 @@ const SettingsView = ({ onBack, onNavigate }) => {
             label: t('pastAssignmentsList'),
             icon: ClipboardList,
             onClick: () => onNavigate('pastAssignments')
+        },
+        {
+            id: 'studyGoals',
+            label: '学習目標の設定',
+            icon: Target,
+            onClick: () => onNavigate('studyGoals')
         },
         {
             id: 'versionHistory',

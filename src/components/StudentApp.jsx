@@ -15,6 +15,7 @@ import ClassSelectionSettings from './student/ClassSelectionSettings';
 import EffectSettings from './student/EffectSettings';
 import VersionHistoryView from './shared/VersionHistoryView';
 import UserGuideView from './student/UserGuideView';
+import StudyGoalSettingsView from './student/StudyGoalSettingsView';
 import { TourProvider } from '../contexts/TourContext';
 import CoachMark from './shared/CoachMark';
 
@@ -22,9 +23,12 @@ const StudentApp = () => {
   const { profile } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('home'); // record | home | timeline
-  const [activeView, setActiveView] = useState(null); // statistics | settings | language | books | pastAssignments | classSelection | effect
+  const [activeView, setActiveView] = useState(null);
   const [preFillData, setPreFillData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // 学習目標が一度も設定されていない場合 true
+  const isGoalUnset = !profile?.studyGoals;
 
   // TourContext からのタブ切り替え要求をハンドル
   const handleTourTabChange = (tab) => {
@@ -111,6 +115,9 @@ const StudentApp = () => {
     if (activeView === 'versionHistory') {
       return <VersionHistoryView onBack={handleBackToSettings} />;
     }
+    if (activeView === 'studyGoals') {
+      return <StudyGoalSettingsView onBack={handleBackToSettings} />;
+    }
     if (activeView === 'userGuide') {
       return <UserGuideView onBack={handleBackToHome} />;
     }
@@ -144,18 +151,22 @@ const StudentApp = () => {
           activeView={activeView}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          isGoalUnset={isGoalUnset}
         />
 
         {/* Header - only show for main tabs, hidden on desktop */}
         {showHeader && (
           <header className="bg-white shadow-sm sticky top-0 z-10 md:hidden">
             <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-              {/* Left: Hamburger */}
+              {/* Left: Hamburger with goal-unset badge */}
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 hover:bg-gray-100 rounded-full transition"
+                className="relative p-2 hover:bg-gray-100 rounded-full transition"
               >
                 <Menu className="w-6 h-6 text-gray-700" />
+                {isGoalUnset && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                )}
               </button>
 
               {/* Center: Logo only */}

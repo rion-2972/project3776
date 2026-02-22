@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     collection,
     query,
@@ -9,20 +9,18 @@ import {
     onSnapshot
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Users, Calendar, BookOpen, TrendingUp, Award, X } from 'lucide-react';
+import { Users, Calendar, BookOpen, TrendingUp, Award, X, ChevronRight, AlertTriangle } from 'lucide-react';
 
 // --- Sub-component: Daily Aggregated Study Hours ---
+// Props: allStudyRecords = all recent study records (for last-seen calculation)
 const DailyAggregatedStudyHours = () => {
     const [yesterdayTotalMinutes, setYesterdayTotalMinutes] = useState(0);
     const [yesterdayActiveCount, setYesterdayActiveCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [showCalendar, setShowCalendar] = useState(false);
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
     const [currentViewMonth, setCurrentViewMonth] = useState(new Date());
     const [monthlyData, setMonthlyData] = useState({});
     const [selectedCalendarDates, setSelectedCalendarDates] = useState(new Set());
-    const [selectedDate] = useState(null);
-    const [selectedDateStudents] = useState([]);
-    const [showStudentModal, setShowStudentModal] = useState(false);
 
     // Fetch yesterday's aggregated study hours
     useEffect(() => {
@@ -63,9 +61,9 @@ const DailyAggregatedStudyHours = () => {
         return () => unsubscribe();
     }, []);
 
-    // Fetch monthly data when calendar is shown
+    // Fetch monthly data when calendar modal is shown
     useEffect(() => {
-        if (!showCalendar) return;
+        if (!showCalendarModal) return;
 
         const start = new Date(currentViewMonth.getFullYear(), currentViewMonth.getMonth(), 1);
         const end = new Date(currentViewMonth.getFullYear(), currentViewMonth.getMonth() + 1, 0, 23, 59, 59);
@@ -88,34 +86,23 @@ const DailyAggregatedStudyHours = () => {
         });
 
         return () => unsubscribe();
-    }, [showCalendar, currentViewMonth]);
+    }, [showCalendarModal, currentViewMonth]);
 
     // Toggle date selection
     const toggleDateSelection = (day) => {
-        if (!monthlyData[day]) return; // Only allow selection of days with data
-
+        if (!monthlyData[day]) return;
         setSelectedCalendarDates(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(day)) {
-                newSet.delete(day);
-            } else {
-                newSet.add(day);
-            }
+            if (newSet.has(day)) { newSet.delete(day); } else { newSet.add(day); }
             return newSet;
         });
     };
 
-
-
     const formatTime = (minutes) => {
-        if (minutes < 60) {
-            return `${minutes}分`;
-        } else {
-            return `${(minutes / 60).toFixed(1)}時間`;
-        }
+        if (minutes < 60) return `${minutes}分`;
+        return `${(minutes / 60).toFixed(1)}時間`;
     };
 
-    // Calculate total minutes for selected dates
     const totalMinutesSelected = Array.from(selectedCalendarDates).reduce((sum, day) => {
         return sum + (monthlyData[day] || 0);
     }, 0);
@@ -127,30 +114,22 @@ const DailyAggregatedStudyHours = () => {
         const lastDay = new Date(year, month + 1, 0);
         const daysInMonth = lastDay.getDate();
         const startingDayOfWeek = firstDay.getDay();
-
         const days = [];
-        // Empty cells before first day
-        for (let i = 0; i < startingDayOfWeek; i++) {
-            days.push(null);
-        }
-        // Days of month
-        for (let day = 1; day <= daysInMonth; day++) {
-            days.push(day);
-        }
+        for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
+        for (let day = 1; day <= daysInMonth; day++) days.push(day);
         return days;
     };
 
-    const goToPrevMonth = () => {
-        setCurrentViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-    };
-
-    const goToNextMonth = () => {
-        setCurrentViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-    };
+    const goToPrevMonth = () => setCurrentViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    const goToNextMonth = () => setCurrentViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
 
     return (
         <>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            {/* Clickable Card */}
+            <button
+                onClick={() => setShowCalendarModal(true)}
+                className="w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:-translate-y-1 hover:shadow-md transition-all duration-200 text-left"
+            >
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">
@@ -163,120 +142,79 @@ const DailyAggregatedStudyHours = () => {
                             {yesterdayActiveCount}人が記録
                         </p>
                     </div>
-                    <button
-                        onClick={() => setShowCalendar(!showCalendar)}
-                        className="bg-indigo-50 p-3 rounded-full hover:bg-indigo-100 transition"
-                    >
-                        <Calendar className="w-6 h-6 text-indigo-600" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Calendar Modal/View */}
-            {showCalendar && (
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mt-4">
-                    <div className="flex items-center justify-between mb-4">
-                        <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                            </svg>
-                        </button>
-                        <h3 className="font-bold text-gray-900">
-                            {currentViewMonth.getFullYear()}年{currentViewMonth.getMonth() + 1}月
-                        </h3>
-                        <button onClick={goToNextMonth} className="p-2 hover:bg-gray-100 rounded">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                        </button>
+                    <div className="flex items-center gap-1 text-gray-300">
+                        <Calendar className="w-6 h-6 text-indigo-400" />
+                        <ChevronRight className="w-4 h-4" />
                     </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                        {['日', '月', '火', '水', '木', '金', '土'].map((day, i) => (
-                            <div key={day} className="text-center text-xs font-bold text-gray-500 p-2">
-                                {day}
-                            </div>
-                        ))}
-                        {getDaysInMonth(currentViewMonth).map((day, index) => (
-                            <div
-                                key={index}
-                                className={`text-center p-2 rounded transition ${selectedCalendarDates.has(day)
-                                    ? 'bg-indigo-200 ring-2 ring-indigo-500'
-                                    : day && monthlyData[day]
-                                        ? 'hover:bg-indigo-50 cursor-pointer'
-                                        : day
-                                            ? 'hover:bg-gray-50'
-                                            : ''
-                                    }`}
-                                onClick={() => day && monthlyData[day] && toggleDateSelection(day)}
-                            >
-                                {day && (
-                                    <div>
-                                        <div className="text-sm font-medium text-gray-900">{day}</div>
-                                        {monthlyData[day] ? (
-                                            <div className="text-[10px] font-bold text-indigo-600">
-                                                {monthlyData[day] < 60
-                                                    ? `${monthlyData[day]}分`
-                                                    : `${(monthlyData[day] / 60).toFixed(1)}h`}
-                                            </div>
-                                        ) : (
-                                            <div className="text-[10px] text-gray-300">-</div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Selected Dates Total Study Time Display */}
-                    {selectedCalendarDates.size > 0 && (
-                        <div className="mt-4 p-3 bg-indigo-50 rounded-lg text-center">
-                            <span className="text-gray-700 font-bold">
-                                選択した日の合計学習時間：{Math.round(totalMinutesSelected / 60)}時間
-                            </span>
-                        </div>
-                    )}
                 </div>
-            )}
+            </button>
 
-            {/* Student Details Modal */}
-            {showStudentModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="font-bold text-gray-900">
-                                {currentViewMonth.getMonth() + 1}月{selectedDate}日の学習記録
-                            </h3>
+            {/* Calendar Modal */}
+            {showCalendarModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
+                        <div className="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+                            <h3 className="font-bold text-gray-900">日別学習時間カレンダー</h3>
                             <button
-                                onClick={() => setShowStudentModal(false)}
-                                className="p-1 hover:bg-gray-100 rounded transition"
+                                onClick={() => setShowCalendarModal(false)}
+                                className="p-1.5 hover:bg-gray-100 rounded-full transition"
                             >
                                 <X className="w-5 h-5 text-gray-500" />
                             </button>
                         </div>
-                        <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
-                            {selectedDateStudents.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-4">記録がありません</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {selectedDateStudents.map((student, index) => (
-                                        <div
-                                            key={student.userId}
-                                            className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-400">
-                                                    #{index + 1}
-                                                </span>
-                                                <span className="text-sm font-medium text-gray-900">
-                                                    {student.userName}
-                                                </span>
+                        <div className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <button onClick={goToPrevMonth} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <h3 className="font-bold text-gray-900">
+                                    {currentViewMonth.getFullYear()}年{currentViewMonth.getMonth() + 1}月
+                                </h3>
+                                <button onClick={goToNextMonth} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-7 gap-1">
+                                {['日', '月', '火', '水', '木', '金', '土'].map((day) => (
+                                    <div key={day} className="text-center text-xs font-bold text-gray-500 p-2">{day}</div>
+                                ))}
+                                {getDaysInMonth(currentViewMonth).map((day, index) => (
+                                    <div
+                                        key={index}
+                                        className={`text-center p-2 rounded-lg transition ${selectedCalendarDates.has(day)
+                                            ? 'bg-indigo-200 ring-2 ring-indigo-500'
+                                            : day && monthlyData[day]
+                                                ? 'hover:bg-indigo-50 cursor-pointer'
+                                                : day ? 'hover:bg-gray-50' : ''
+                                            }`}
+                                        onClick={() => day && monthlyData[day] && toggleDateSelection(day)}
+                                    >
+                                        {day && (
+                                            <div>
+                                                <div className="text-sm font-medium text-gray-900">{day}</div>
+                                                {monthlyData[day] ? (
+                                                    <div className="text-[10px] font-bold text-indigo-600">
+                                                        {monthlyData[day] < 60
+                                                            ? `${monthlyData[day]}分`
+                                                            : `${(monthlyData[day] / 60).toFixed(1)}h`}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-[10px] text-gray-300">-</div>
+                                                )}
                                             </div>
-                                            <span className="text-sm font-bold text-indigo-600">
-                                                {formatTime(student.totalMinutes)}
-                                            </span>
-                                        </div>
-                                    ))}
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            {selectedCalendarDates.size > 0 && (
+                                <div className="mt-4 p-3 bg-indigo-50 rounded-xl text-center">
+                                    <span className="text-gray-700 font-bold">
+                                        選択した日の合計学習時間：{Math.round(totalMinutesSelected / 60)}時間
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -291,6 +229,8 @@ const TeacherHomeView = () => {
     const [dailyActiveCount, setDailyActiveCount] = useState(0);
     const [dailyActiveStudents, setDailyActiveStudents] = useState([]);
     const [showActiveStudentsModal, setShowActiveStudentsModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('recorded'); // 'recorded' | 'unrecorded'
+    const [lastRecordedAtMap, setLastRecordedAtMap] = useState({}); // { userId: Date }
     const [weeklyStats, setWeeklyStats] = useState({
         totalHours: 0,
         topStudents: [],
@@ -324,12 +264,13 @@ const TeacherHomeView = () => {
         }
     }, [students.length]);
 
-    // ==== fetch daily active ====
+    // ==== fetch daily active + track last-recorded date for unrecorded students ====
     const fetchDailyActive = useCallback(async () => {
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
+            // Fetch today's records
             const q = query(collectionGroup(db, 'studyRecords'), where('createdAt', '>=', today));
             const snapshot = await getDocs(q);
 
@@ -348,9 +289,23 @@ const TeacherHomeView = () => {
             });
 
             const studentsList = Object.values(userDataMap).sort((a, b) => b.totalMinutes - a.totalMinutes);
-
             setDailyActiveCount(studentsList.length);
             setDailyActiveStudents(studentsList);
+
+            // Also fetch last 30 days to determine most recent study date per student
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const q2 = query(collectionGroup(db, 'studyRecords'), where('createdAt', '>=', thirtyDaysAgo), orderBy('createdAt', 'desc'));
+            const snap2 = await getDocs(q2);
+            const lastMap = {};
+            snap2.docs.forEach(doc => {
+                const userId = doc.ref.parent.parent.id;
+                const createdAt = doc.data().createdAt?.toDate();
+                if (createdAt && !lastMap[userId]) {
+                    lastMap[userId] = createdAt;
+                }
+            });
+            setLastRecordedAtMap(lastMap);
         } catch (error) {
             console.error('Error fetching daily active:', error);
         }
@@ -602,16 +557,20 @@ const TeacherHomeView = () => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">読み込み中...</div>
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+                <div className="w-10 h-10 border-4 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                <div className="text-sm text-gray-400 font-medium">読み込み中...</div>
             </div>
         );
     }
 
     return (
         <div className="pb-20 space-y-6">
-            {/* Daily Active Count */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            {/* Daily Active Count Card — clickable, opens tab-modal */}
+            <button
+                className="w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:-translate-y-1 hover:shadow-md transition-all duration-200 text-left"
+                onClick={() => { setActiveTab('recorded'); setShowActiveStudentsModal(true); }}
+            >
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">
@@ -620,54 +579,117 @@ const TeacherHomeView = () => {
                         <div className="text-4xl font-bold text-indigo-600">
                             {dailyActiveCount} <span className="text-lg text-gray-400 font-normal">人</span>
                         </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                            全体 {students.length}人中
+                        </p>
                     </div>
-                    <button
-                        onClick={() => setShowActiveStudentsModal(true)}
-                        className="bg-indigo-50 p-4 rounded-full hover:bg-indigo-100 transition cursor-pointer"
-                        title="記録者一覧を表示"
-                    >
-                        <Users className="w-8 h-8 text-indigo-600" />
-                    </button>
+                    <div className="flex items-center gap-1 text-gray-300">
+                        <Users className="w-6 h-6 text-indigo-400" />
+                        <ChevronRight className="w-4 h-4" />
+                    </div>
                 </div>
-            </div>
+                {/* progress bar */}
+                {students.length > 0 && (
+                    <div className="mt-3 w-full bg-gray-100 rounded-full h-1.5">
+                        <div
+                            className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                            style={{ width: `${Math.min((dailyActiveCount / students.length) * 100, 100)}%` }}
+                        />
+                    </div>
+                )}
+            </button>
 
-            {/* Daily Active Students Modal */}
+            {/* Daily Active Students Modal — tab-based */}
             {showActiveStudentsModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
-                        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="font-bold text-gray-900">今日の記録者一覧</h3>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                    <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] flex flex-col">
+                        {/* Header */}
+                        <div className="p-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+                            <h3 className="font-bold text-gray-900">今日の記録状況</h3>
                             <button
                                 onClick={() => setShowActiveStudentsModal(false)}
-                                className="p-1 hover:bg-gray-100 rounded transition"
+                                className="p-1.5 hover:bg-gray-100 rounded-full transition"
                             >
                                 <X className="w-5 h-5 text-gray-500" />
                             </button>
                         </div>
-                        <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
-                            {dailyActiveStudents.length === 0 ? (
-                                <p className="text-sm text-gray-400 text-center py-4">記録者がいません</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {dailyActiveStudents.map((student, index) => (
-                                        <div
-                                            key={student.userId}
-                                            className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-400">
-                                                    #{index + 1}
-                                                </span>
-                                                <span className="text-sm font-medium text-gray-900">
-                                                    {student.userName}
-                                                </span>
+                        {/* Tabs */}
+                        <div className="flex border-b border-gray-100 shrink-0">
+                            <button
+                                onClick={() => setActiveTab('recorded')}
+                                className={`flex-1 py-3 text-sm font-bold transition ${activeTab === 'recorded'
+                                    ? 'text-indigo-600 border-b-2 border-indigo-500'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                記録済み ({dailyActiveStudents.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('unrecorded')}
+                                className={`flex-1 py-3 text-sm font-bold transition ${activeTab === 'unrecorded'
+                                    ? 'text-red-500 border-b-2 border-red-400'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                未記録 ({Math.max(students.length - dailyActiveStudents.length, 0)})
+                            </button>
+                        </div>
+                        {/* Content */}
+                        <div className="overflow-y-auto flex-1 p-4">
+                            {activeTab === 'recorded' ? (
+                                dailyActiveStudents.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-6">記録者がいません</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {dailyActiveStudents.map((student, index) => (
+                                            <div key={student.userId} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-gray-300">#{index + 1}</span>
+                                                    <span className="text-sm font-medium text-gray-900">{student.userName}</span>
+                                                </div>
+                                                <span className="text-sm font-bold text-indigo-600">{formatTime(student.totalMinutes)}</span>
                                             </div>
-                                            <span className="text-sm font-bold text-indigo-600">
-                                                {formatTime(student.totalMinutes)}
-                                            </span>
+                                        ))}
+                                    </div>
+                                )
+                            ) : (
+                                (() => {
+                                    const activeIds = new Set(dailyActiveStudents.map(s => s.userId));
+                                    const today = new Date();
+                                    const unrecorded = students
+                                        .filter(s => !activeIds.has(s.id))
+                                        .map(s => {
+                                            const last = lastRecordedAtMap[s.id];
+                                            const daysSince = last
+                                                ? Math.floor((today - last) / (1000 * 60 * 60 * 24))
+                                                : null;
+                                            return { ...s, daysSince };
+                                        })
+                                        .sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999));
+                                    return unrecorded.length === 0 ? (
+                                        <p className="text-sm text-gray-400 text-center py-6">全当が記録済みです 🎉</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {unrecorded.map(student => (
+                                                <div key={student.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl">
+                                                    <span className="text-sm font-medium text-gray-900">
+                                                        {student.displayName || student.userName || '名前なし'}
+                                                    </span>
+                                                    {student.daysSince !== null && student.daysSince >= 3 ? (
+                                                        <span className="flex items-center gap-1 text-[11px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                                                            <AlertTriangle className="w-3 h-3" />
+                                                            {student.daysSince}日未記録
+                                                        </span>
+                                                    ) : student.daysSince !== null ? (
+                                                        <span className="text-[11px] text-gray-400">{student.daysSince}日前に記録</span>
+                                                    ) : (
+                                                        <span className="text-[11px] text-gray-300">記録なし</span>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })()
                             )}
                         </div>
                     </div>
@@ -675,7 +697,9 @@ const TeacherHomeView = () => {
             )}
 
             {/* Daily Aggregated Study Hours with Calendar */}
-            <DailyAggregatedStudyHours />
+            <div id="teacher-tour-daily-hours">
+                <DailyAggregatedStudyHours />
+            </div>
 
             {/* Weekly Summary */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -741,13 +765,14 @@ const TeacherHomeView = () => {
 
             {/* Assignments Progress */}
             {!showPastAssignmentsView ? (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100" id="teacher-tour-assignments">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <BookOpen className="w-5 h-5 text-gray-500" />
                             <h3 className="font-bold text-gray-900">課題進捗</h3>
                         </div>
                         <button
+                            id="teacher-tour-add-assignment"
                             onClick={() => setShowPastAssignmentsView(true)}
                             className="text-sm text-indigo-600 font-bold px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition"
                         >

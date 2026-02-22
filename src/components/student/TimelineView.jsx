@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { Clock, User, Flame } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import MtFujiProgress from '../shared/MtFujiProgress';
+import { getSubjectColor } from '../../utils/constants';
 
 // === リアクション絵文字の定義 ===
 const REACTION_EMOJIS = [
@@ -310,13 +311,25 @@ const TimelineView = () => {
     return (
         <div className="space-y-4">
             {/* 富士山進捗表示 */}
-            <MtFujiProgress
-                currentHours={monthlyTotalHours}
-                targetHours={3776}
-                currentMonth={currentMonth}
-            />
+            <div id="tour-fuji-progress">
+                <MtFujiProgress
+                    currentHours={monthlyTotalHours}
+                    targetHours={3776}
+                    currentMonth={currentMonth}
+                />
+            </div>
 
-            <h2 className="text-xl font-bold text-gray-900 mb-4 px-2">みんなの学習記録</h2>
+            <div className="mb-4 mx-2">
+                <h2 className="text-xl font-bold text-gray-900 mb-2">みんなの学習記録</h2>
+                <div className="p-3 bg-gradient-to-r from-amber-50/80 to-orange-50/80 border border-amber-100/60 rounded-xl text-xs text-amber-800 leading-relaxed shadow-sm">
+                    <strong className="flex items-center gap-1.5 mb-1.5 text-sm">
+                        <span>🎯</span>目標達成バッジ
+                    </strong>
+                    <p>
+                        目標時間を連続クリアすると、「🥉3日 → 🥈7日 → 🥇14日 → 👑21日」とバッジが進化します！
+                    </p>
+                </div>
+            </div>
 
             {records.length === 0 ? (
                 <div className="bg-white p-8 rounded-xl text-center text-gray-500">
@@ -366,7 +379,10 @@ const TimelineView = () => {
 
                                     <div className="pl-10">
                                         <div className="flex flex-wrap gap-2 mb-1.5">
-                                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg">
+                                            <span
+                                                className="px-2.5 py-1 text-white text-xs font-bold rounded-lg"
+                                                style={{ background: getSubjectColor(record.subject) }}
+                                            >
                                                 {record.subject?.replace(/（.*?）/, '')}
                                             </span>
                                             <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg">

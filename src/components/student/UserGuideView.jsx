@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Home, PenTool, Clock, BarChart3, Settings,
     ChevronDown, ChevronRight, Lightbulb, ArrowLeft,
-    CheckSquare, Timer, Zap, Users, BookOpen, Sparkles, Play
+    CheckSquare, Timer, Zap, Users, BookOpen, Sparkles, Target, Play
 } from 'lucide-react';
 import { useTour } from '../../contexts/TourContext';
 
@@ -84,8 +84,8 @@ const TABS = [
             },
             {
                 icon: CheckSquare,
-                title: 'ストリーク（連続記録）',
-                desc: '何日連続で学習を記録できているかが🔥の数で表示されます。連続記録を伸ばすことがモチベーションになります。',
+                title: 'ストリーク（連続記録）と目標達成バッジ',
+                desc: '何日連続で学習を記録できているかが🔥の数で表示されます。さらに、設定した目標時間を連続で達成し続けると、一段上の特別なバッジが付与されます：3日達成で🥉、7日で🥈、14日で🥇、21日以上の連続達成で👑（王冠）が輝きます。',
             },
         ],
     },
@@ -132,6 +132,11 @@ const TABS = [
                 desc: 'タスク完了時の演出（エフェクトや効果音）を自分好みにカスタマイズできます。',
             },
             {
+                icon: Target,
+                title: '学習目標の設定',
+                desc: '平日・休日や曜日ごとに1日の目標時間を設定できます。目標を達成し続けるとタイムラインのアイコンが進化します！',
+            },
+            {
                 icon: CheckSquare,
                 title: 'その他の設定',
                 desc: '通知、言語設定、プロフィールのクラス情報なども変更できます。',
@@ -161,6 +166,11 @@ const TIPS = [
         emoji: '🔥',
         title: '連続記録はモチベーションの源',
         body: 'タイムライン画面のストリーク（連続学習日数）は、毎日記録するたびに伸びていきます。途切れると0に戻るので、継続する意欲に！',
+    },
+    {
+        emoji: '👑',
+        title: '目標を達成し続けるとバッジが進化する',
+        body: '設定した学習目標時間を連続でクリアするたびに、タイムラインのアイコンが進化します。3日達成で🥉、7日で🥈、14日で🥇、そして21日以上連続で目標を完全達成すると名前の横に👑（王冠）が輝きます！',
     },
     {
         emoji: '📚',

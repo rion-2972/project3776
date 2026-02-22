@@ -63,4 +63,18 @@ export const getDefaultSubjects = (type, historyChoice = '日本史', scienceCho
   return subjects;
 };
 
-
+export const getSubjectColor = (subject) => {
+  if (!subject) return '#9ca3af'; // Gray fallback
+  if (subject.includes('英語') || subject.includes('英論')) return '#6366f1'; // Indigo
+  if (subject.includes('数学')) return '#ec4899'; // Pink
+  if (subject.includes('国語') || subject.includes('現代文') || subject.includes('古典')) return '#f59e0b'; // Amber
+  if (subject.includes('物理')) return '#8b5cf6'; // Purple
+  if (subject.includes('化学')) return '#10b981'; // Emerald
+  if (subject.includes('生物')) return '#14b8a6'; // Teal
+  if (subject.includes('日本史')) return '#f97316'; // Orange
+  if (subject.includes('世界史')) return '#ef4444'; // Red
+  if (subject.includes('地理') || subject.includes('社会')) return '#3b82f6'; // Blue
+  if (subject.includes('政経') || subject.includes('政治経済')) return '#0ea5e9'; // Sky
+  if (subject.includes('情報')) return '#84cc16'; // Lime
+  return '#9ca3af'; // Gray fallback
+};
