@@ -54,4 +54,11 @@ export const TOUR_STEPS = [
         body: '仲間の記録に絵文字スタンプを送ってお互いに励まし合えます。「+」ボタンで絵文字を選んで送りましょう！',
         placement: 'top',
     },
+    {
+        targetId: 'tour-fuji-progress',
+        tab: 'timeline',
+        title: '富士山登頂チャレンジ 🗻',
+        body: '毎日の学習時間が山を登る歩みになります。月間目標時間（3,776時間=富士山の標高）に向けてコツコツ登りましょう！',
+        placement: 'bottom',
+    },
 ];

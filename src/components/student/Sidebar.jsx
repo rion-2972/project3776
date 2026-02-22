@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { X, BarChart3, Settings, PenTool, Home, Clock, HelpCircle } from 'lucide-react';
 
-const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab, onTabChange }) => {
+const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab, onTabChange, isGoalUnset }) => {
     const { t } = useLanguage();
 
     const handleNavigation = (view) => {
@@ -102,6 +102,18 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                                 <span className="text-sm font-bold text-gray-900">{t('sidebarStatistics')}</span>
                             </button>
 
+                            {/* 目標未設定の吹き出し */}
+                            {isGoalUnset && (
+                                <div className="mb-1 mx-1">
+                                    <div className="bg-indigo-600 text-white text-xs font-bold px-3 py-2 rounded-xl relative shadow-md">
+                                        🎯 学習目標を設定しましょう！
+                                        {/* 下向き三角 */}
+                                        <div className="absolute -bottom-1.5 left-6 w-3 h-2 overflow-hidden">
+                                            <div className="bg-indigo-600 w-2 h-2 rotate-45 translate-x-0.5" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <button
                                 onClick={() => handleNavigation('settings')}
                                 className={`w-full flex items-center gap-3 p-4 rounded-xl transition ${activeView === 'settings'
@@ -109,8 +121,11 @@ const Sidebar = ({ isOpen, onClose, userName, onNavigate, activeView, activeTab,
                                     : 'bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100'
                                     } group`}
                             >
-                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
+                                <div className="relative p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
                                     <Settings className="w-5 h-5 text-gray-600" />
+                                    {isGoalUnset && (
+                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                                    )}
                                 </div>
                                 <span className="text-sm font-bold text-gray-900">{t('sidebarSettings')}</span>
                             </button>

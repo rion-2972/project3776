@@ -1,9 +1,7 @@
 import React from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, Home, BarChart3, Clock, Settings, LogOut } from 'lucide-react';
+import { X, Home, BarChart3, Clock, Settings, HelpCircle } from 'lucide-react';
 
 const TeacherSidebar = ({ isOpen, onClose, profile, activeTab, activeView, onTabChange, onNavigate }) => {
-    const { signOut } = useAuth();
 
     const handleTabClick = (tab) => {
         onTabChange(tab);
@@ -103,18 +101,20 @@ const TeacherSidebar = ({ isOpen, onClose, profile, activeTab, activeView, onTab
                                 </div>
                                 <span className="text-sm font-bold text-gray-900">設定</span>
                             </button>
-                        </nav>
-                    </div>
 
-                    {/* フッター */}
-                    <div className="p-4 border-t border-gray-200">
-                        <button
-                            onClick={signOut}
-                            className="w-full flex items-center gap-2 p-3 text-gray-600 hover:bg-gray-50 rounded-lg transition"
-                        >
-                            <LogOut className="w-5 h-5" />
-                            <span className="text-sm font-medium">ログアウト</span>
-                        </button>
+                            <button
+                                onClick={() => handleNavigation('userGuide')}
+                                className={`w-full flex items-center gap-3 p-4 rounded-xl transition ${activeView === 'userGuide'
+                                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50'
+                                    : 'bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100'
+                                    } group`}
+                            >
+                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow transition">
+                                    <HelpCircle className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">使い方ガイド</span>
+                            </button>
+                        </nav>
                     </div>
                 </div>
             </div>

@@ -11,7 +11,7 @@ const TeacherSettingsView = ({ onBack, onNavigate }) => {
             label: 'バージョン履歴',
             icon: History,
             onClick: () => onNavigate('versionHistory')
-        }
+        },
     ];
 
     return (
