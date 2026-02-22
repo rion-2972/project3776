@@ -310,15 +310,37 @@ const AssignmentsSection = ({ user, profile, onAssignmentClick }) => {
     const isAnimating = useRef(false); // 連打防止ロック
 
 
-    // Fetch Assignments (Global) - In real app, filter by subject match?
+    // Fetch Assignments (Global) - Optimized to reduce reads
     useEffect(() => {
-        const q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
+        if (!profile) return;
+
+        const userSubjects = profile.subjects || [];
+        const validSubjects = Array.from(new Set([...userSubjects, '英論']));
+        let q;
+
+        if (validSubjects.length > 0 && validSubjects.length <= 10) {
+            // where('in') limits to 10 array items, saving countless reads.
+            q = query(
+                collection(db, 'assignments'),
+                where('subject', 'in', validSubjects)
+            );
+        } else {
+            q = query(collection(db, 'assignments'), orderBy('dueDate', 'asc'));
+        }
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const now = new Date();
             const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Filter for user's subjects
-            const userSubjects = profile?.subjects || [];
+
+            // Sort by dueDate locally instead of querying for it to skip expensive index requirements
+            data.sort((a, b) => {
+                if (!a.dueDate && !b.dueDate) return 0;
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return a.dueDate.localeCompare(b.dueDate);
+            });
+
             const current = [];
             const past = [];
 
